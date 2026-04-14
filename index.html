@@ -628,6 +628,20 @@
 
     <!-- Alphabet reference -->
     <div class="sidebar-section">
+      <!-- Add this as a new sidebar-section -->
+<div class="sidebar-section">
+  <div class="section-label">ML Model</div>
+  <input type="file" id="modelLoader" accept=".json" style="display:none" onchange="loadModelFile(event)">
+  <button class="btn" onclick="document.getElementById('modelLoader').click()" style="width:100%">
+    📁 Load Trained Model
+  </button>
+  <div id="modelStatus" style="font-size:11px;color:var(--muted);margin-top:8px;font-family:'DM Mono',monospace">
+    Using rule-based detection
+  </div>
+  <a href="train.html" target="_blank" style="display:block;margin-top:8px;font-size:12px;color:var(--accent);text-decoration:none">
+    → Train new model
+  </a>
+</div>
       <div class="section-label">ASL Alphabet</div>
       <div class="alphabet-grid" id="alphaGrid"></div>
     </div>
@@ -651,483 +665,100 @@
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
 
 <script>
-// ─── STATE ────────────────────────────────────────────────────────────────────
-  // More precise finger detection
-function isFingerExtended(tip, pip, wrist) {
-  // Check if tip is farther from wrist than pip
-  const tipDist = Math.hypot(lms[tip].x - lms[wrist].x, lms[tip].y - lms[wrist].y);
-  const pipDist = Math.hypot(lms[pip].x - lms[wrist].x, lms[pip].y - lms[wrist].y);
-  return tipDist > pipDist;
-}
 
-// Check if fingers are touching
-function areFingersTouching(tip1, tip2, threshold = 0.05) {
-  return dist(tip1, tip2) < threshold;
-}
-const state = {
-  cameraRunning: false,
-  currentChar: null,
-  holdFrames: 0,
-  holdThreshold: 12,
-  wordText: '',
-  lastChar: null,
-  savedPhrases: JSON.parse(localStorage.getItem('signspeak_saved') || '[]'),
-  cameraFacing: 'user',
-  handVisible: false,
-  stream: null,
-  mpCamera: null,
-};
-
-const ASL_LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').concat(['SPC']);
-
-// ─── UI REFS ──────────────────────────────────────────────────────────────────
-const videoEl = document.getElementById('videoEl');
-const overlayCanvas = document.getElementById('overlayCanvas');
-const ctx = overlayCanvas.getContext('2d');
-const placeholder = document.getElementById('placeholder');
-const statusDot = document.getElementById('statusDot');
-const statusText = document.getElementById('statusText');
-const startBtn = document.getElementById('startBtn');
-const detectBadge = document.getElementById('detectBadge');
-const detectText = document.getElementById('detectText');
-const confBadge = document.getElementById('confBadge');
-const confVal = document.getElementById('confVal');
-const confBar = document.getElementById('confBar');
-const currentLetterEl = document.getElementById('currentLetter');
-const wordTextEl = document.getElementById('wordText');
-
-// ─── ALPHABET GRID ────────────────────────────────────────────────────────────
-const alphaGrid = document.getElementById('alphaGrid');
-ASL_LETTERS.forEach(l => {
-  const cell = document.createElement('div');
-  cell.className = 'alpha-cell' + (l === 'SPC' ? ' space' : '');
-  cell.textContent = l === 'SPC' ? 'SPC' : l;
-  cell.id = 'alpha_' + l;
-  alphaGrid.appendChild(cell);
-});
-
-function highlightAlpha(char) {
-  document.querySelectorAll('.alpha-cell').forEach(c => c.classList.remove('highlight'));
-  if (char) {
-    const key = char === ' ' ? 'SPC' : char.toUpperCase();
-    const el = document.getElementById('alpha_' + key);
-    if (el) el.classList.add('highlight');
-  }
-}
-
-// ─── SAVED PHRASES ─────────────────────────────────────────────────────────
-function renderSaved() {
-  const list = document.getElementById('savedList');
-  const empty = document.getElementById('emptyMsg');
-  list.innerHTML = '';
-  if (state.savedPhrases.length === 0) {
-    list.appendChild(empty || (() => {
-      const d = document.createElement('div');
-      d.className = 'empty-saved';
-      d.id = 'emptyMsg';
-      d.textContent = 'No saved phrases yet';
-      return d;
-    })());
-    return;
-  }
-  state.savedPhrases.forEach((p, i) => {
-    const item = document.createElement('div');
-    item.className = 'saved-item';
-    item.innerHTML = `<span title="${p}">${p}</span><button class="del-btn" onclick="deletePhrase(${i})">✕</button>`;
-    item.querySelector('span').onclick = () => { state.wordText = p; renderWord(); };
-    list.appendChild(item);
-  });
-}
-
-function savePhrase() {
-  const txt = state.wordText.trim();
-  if (!txt) { showToast('Nothing to save'); return; }
-  state.savedPhrases.unshift(txt);
-  if (state.savedPhrases.length > 20) state.savedPhrases.pop();
-  localStorage.setItem('signspeak_saved', JSON.stringify(state.savedPhrases));
-  renderSaved();
-  showToast('Phrase saved!');
-}
-
-function deletePhrase(i) {
-  state.savedPhrases.splice(i, 1);
-  localStorage.setItem('signspeak_saved', JSON.stringify(state.savedPhrases));
-  renderSaved();
-}
-
-renderSaved();
-
-// ─── TEXT CONTROLS ────────────────────────────────────────────────────────────
-function renderWord() {
-  wordTextEl.textContent = state.wordText;
-}
-
-function appendChar(char) {
-  state.wordText += char;
-  renderWord();
-  // pop animation
-  currentLetterEl.classList.remove('pop');
-  void currentLetterEl.offsetWidth;
-  currentLetterEl.classList.add('pop');
-}
-
-function addSpace() { appendChar(' '); }
-function deleteLast() { state.wordText = state.wordText.slice(0, -1); renderWord(); }
-function clearAll() { state.wordText = ''; renderWord(); showToast('Cleared'); }
-
-function exportTxt() {
-  const txt = state.wordText.trim();
-  if (!txt) { showToast('Nothing to export'); return; }
-  const blob = new Blob([txt], { type: 'text/plain' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = 'signspeak_' + Date.now() + '.txt';
-  a.click();
-  showToast('Exported!');
-}
-
-// ─── SLIDERS ──────────────────────────────────────────────────────────────────
-function updateHold(v) {
-  state.holdThreshold = parseInt(v);
-  document.getElementById('holdVal').textContent = (v / 10).toFixed(1) + 's';
-}
-function updateScale(v) {
-  document.getElementById('scaleVal').textContent = (v / 10).toFixed(1) + '×';
-}
-
-// ─── TOAST ────────────────────────────────────────────────────────────────────
-let toastTimeout;
-function showToast(msg) {
-  const t = document.getElementById('toast');
-  t.textContent = msg;
-  t.classList.add('show');
-  clearTimeout(toastTimeout);
-  toastTimeout = setTimeout(() => t.classList.remove('show'), 2200);
-}
-
-// ─── CAMERA SOURCE ────────────────────────────────────────────────────────────
-function selectSource(facing) {
-  state.cameraFacing = facing;
-  document.getElementById('tabWebcam').classList.toggle('active', facing === 'user');
-  document.getElementById('tabBT').classList.toggle('active', facing === 'environment');
-  if (state.cameraRunning) {
-    stopCamera();
-    setTimeout(startCamera, 300);
-  }
-}
-
-// ─── MEDIAPIPE HANDS ──────────────────────────────────────────────────────────
-let hands;
-
-function initHands() {
-  hands = new Hands({
-    locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
-  });
-  hands.setOptions({
-    maxNumHands: 1,
-    modelComplexity: 1,
-    minDetectionConfidence: 0.7,
-    minTrackingConfidence: 0.6,
-  });
-  hands.onResults(onHandResults);
-}
-
-// ─── HAND LANDMARK DRAWING ────────────────────────────────────────────────────
-const CONNECTIONS = [
-  [0,1],[1,2],[2,3],[3,4],
-  [0,5],[5,6],[6,7],[7,8],
-  [5,9],[9,10],[10,11],[11,12],
-  [9,13],[13,14],[14,15],[15,16],
-  [13,17],[17,18],[18,19],[19,20],
-  [0,17]
-];
-
-function drawLandmarks(lms, w, h) {
-  ctx.clearRect(0, 0, w, h);
-  if (!lms || lms.length === 0) return;
-
-  const pts = lms.map(p => ({ x: p.x * w, y: p.y * h }));
-
-  // Draw bones
-  ctx.strokeStyle = 'rgba(0,229,255,0.55)';
-  ctx.lineWidth = 2;
-  CONNECTIONS.forEach(([a, b]) => {
-    ctx.beginPath();
-    ctx.moveTo(pts[a].x, pts[a].y);
-    ctx.lineTo(pts[b].x, pts[b].y);
-    ctx.stroke();
-  });
-
-  // Draw joints
-  pts.forEach((p, i) => {
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, i === 0 ? 6 : 4, 0, Math.PI * 2);
-    ctx.fillStyle = i === 0 ? '#4fffb0' : 'rgba(0,229,255,0.9)';
-    ctx.fill();
-  });
-}
-
-// ─── SIMPLE ASL CLASSIFIER ────────────────────────────────────────────────────
-// Heuristic-based: uses normalized landmark geometry
-function classifyASL(lms) {
-  if (!lms || lms.length < 21) return null;
-
-  // Helper: normalized distance
-  function dist(a, b) {
-    return Math.hypot(lms[a].x - lms[b].x, lms[a].y - lms[b].y);
-  }
-  function angle(a, b, c) {
-    const ax = lms[a].x - lms[b].x, ay = lms[a].y - lms[b].y;
-    const cx = lms[c].x - lms[b].x, cy = lms[c].y - lms[b].y;
-    const dot = ax * cx + ay * cy;
-    const mag = Math.hypot(ax, ay) * Math.hypot(cx, cy);
-    return Math.acos(Math.max(-1, Math.min(1, dot / (mag || 1)))) * (180 / Math.PI);
-  }
-
-  // Finger extended: tip significantly above pip (lower y = higher on screen)
-  function fingerExtended(tip, pip) { return lms[tip].y < lms[pip].y - 0.03; }
-  function fingerCurled(tip, pip) { return lms[tip].y > lms[pip].y + 0.01; }
-
-  // Thumb: compare x to metacarpal
-  const thumbExtR = lms[4].x > lms[3].x + 0.03;
-  const thumbExtL = lms[4].x < lms[3].x - 0.03;
-  const thumbUp = lms[4].y < lms[3].y - 0.03;
-
-  const indexExt = fingerExtended(8, 6);
-  const middleExt = fingerExtended(12, 10);
-  const ringExt = fingerExtended(16, 14);
-  const pinkyExt = fingerExtended(20, 18);
-
-  const indexCurl = fingerCurled(8, 6);
-  const middleCurl = fingerCurled(12, 10);
-  const ringCurl = fingerCurled(16, 14);
-  const pinkyCurl = fingerCurled(20, 18);
-
-  // Fingertip spread: distance between index and middle tip
-  const imSpread = dist(8, 12);
-  const imrpSpread = dist(8, 20);
-
-  // Simple rule-based mapping (heuristic approximation):
-  const allExt = indexExt && middleExt && ringExt && pinkyExt;
-  const allCurl = indexCurl && middleCurl && ringCurl && pinkyCurl;
-
-  if (allCurl && !thumbExtR && !thumbExtL) return { char: 'A', conf: 0.82 };
-  if (allExt && (thumbExtR || thumbExtL)) return { char: 'B', conf: 0.78 };
-  if (allCurl && !indexCurl) return { char: 'D', conf: 0.70 };
-  if (!indexExt && !middleExt && !ringExt && !pinkyExt && (thumbExtR || thumbExtL)) return { char: 'A', conf: 0.75 };
-  if (indexExt && !middleExt && !ringExt && !pinkyExt) return { char: 'G', conf: 0.72 };
-  if (indexExt && middleExt && !ringExt && !pinkyExt && imSpread < 0.06) return { char: 'U', conf: 0.74 };
-  if (indexExt && middleExt && !ringExt && !pinkyExt && imSpread > 0.07) return { char: 'V', conf: 0.76 };
-  if (indexExt && middleExt && ringExt && !pinkyExt) return { char: 'W', conf: 0.74 };
-  if (allExt && !thumbExtR && !thumbExtL) return { char: 'B', conf: 0.71 };
-  if (!indexExt && middleExt && !ringExt && !pinkyExt) return { char: 'H', conf: 0.68 };
-  if (pinkyExt && !indexExt && !middleExt && !ringExt) return { char: 'I', conf: 0.74 };
-  if (pinkyExt && indexExt && !middleExt && !ringExt && (thumbExtR || thumbExtL)) return { char: 'Y', conf: 0.76 };
-  if (pinkyExt && indexExt && !middleExt && !ringExt) return { char: 'I', conf: 0.70 };
-  if (thumbUp && allCurl) return { char: 'A', conf: 0.73 };
-
-  // O shape: all tips close together
-  const tipCluster = dist(8, 4) < 0.1 && dist(12, 4) < 0.12;
-  if (tipCluster) return { char: 'O', conf: 0.72 };
-
-  // L shape
-  if (indexExt && thumbExtR && !middleExt && !ringExt && !pinkyExt) return { char: 'L', conf: 0.80 };
-  if (indexExt && thumbExtL && !middleExt && !ringExt && !pinkyExt) return { char: 'L', conf: 0.80 };
-
-  // C - Curved hand (fingers curved, open palm, thumb away)
-const fingersCurled = indexCurl && middleCurl && ringCurl && pinkyCurl;
-const thumbOpen = dist(4, 17) > 0.15; // Thumb away from pinky base
-if (fingersCurled && thumbOpen && lms[8].x > lms[5].x) {
-  return { char: 'C', conf: 0.75 };
-}
-
-// E - Fingers curled tight, thumb across palm
-if (fingersCurled && (thumbExtR || thumbExtL) && dist(4, 9) < 0.08) {
-  return { char: 'E', conf: 0.72 };
-}
-
-// F - Index touches thumb, others extended
-if (indexCurl && middleExt && ringExt && pinkyExt && dist(4, 8) < 0.05) {
-  return { char: 'F', conf: 0.78 };
-}
-
-// K - Index and middle up in V, thumb up between them
-if (indexExt && middleExt && ringCurl && pinkyCurl && thumbUp && lms[4].y < lms[10].y) {
-  return { char: 'K', conf: 0.74 };
-}
-
-// M - All fingers curled over thumb
-if (fingersCurled && !thumbUp && dist(12, 2) < 0.1) {
-  return { char: 'M', conf: 0.70 };
-}
-
-// N - Similar to M but different thumb position
-if (fingersCurled && !thumbUp && dist(12, 2) > 0.08 && dist(12, 2) < 0.15) {
-  return { char: 'N', conf: 0.70 };
-}
-
-// P - Index down, middle up, thumb up (K rotated down)
-if (!indexExt && middleExt && ringCurl && pinkyCurl && lms[8].y > lms[5].y) {
-  return { char: 'P', conf: 0.73 };
-}
-
-// Q - Thumb and index pinch, pointing down
-if (indexCurl && !thumbUp && lms[8].y > lms[0].y && dist(4, 8) < 0.06) {
-  return { char: 'Q', conf: 0.71 };
-}
-
-// R - Crossed fingers (index over middle)
-if (indexExt && middleExt && ringCurl && pinkyCurl && lms[8].x < lms[12].x) {
-  return { char: 'R', conf: 0.76 };
-}
-
-// S - Fist with thumb over fingers (all curled)
-if (fingersCurled && !thumbUp && dist(4, 9) < 0.1 && dist(4, 5) < 0.1) {
-  return { char: 'S', conf: 0.74 };
-}
-
-// T - Thumb between index and middle
-if (fingersCurled && !thumbUp && lms[4].x > lms[5].x && lms[4].x < lms[9].x) {
-  return { char: 'T', conf: 0.72 };
-}
-
-// X - Index bent, others curled
-if (!indexExt && !indexCurl && middleCurl && ringCurl && pinkyCurl) {
-  return { char: 'X', conf: 0.73 };
-}
-
-  return null;
-}
-
-// ─── HAND RESULTS CALLBACK ────────────────────────────────────────────────────
-function onHandResults(results) {
-  const w = overlayCanvas.width, h = overlayCanvas.height;
-  ctx.clearRect(0, 0, w, h);
-
-  const lms = results.multiHandLandmarks?.[0];
-  state.handVisible = !!lms;
-
-  if (lms) {
-    drawLandmarks(lms, w, h);
-    detectText.textContent = 'Hand detected';
-    detectBadge.innerHTML = '<div class="status-dot active" style="background:var(--accent);box-shadow:0 0 6px var(--accent)"></div><span>Hand detected</span>';
-
-    const result = classifyASL(lms);
-    if (result) {
-      confBadge.classList.add('visible');
-      const pct = Math.round(result.conf * 100);
-      confVal.textContent = pct + '%';
-      confBar.style.width = pct + '%';
-
-      currentLetterEl.textContent = result.char;
-      highlightAlpha(result.char);
-      setStatus('detecting', 'Recognizing…');
-
-      if (result.char === state.lastChar) {
-        state.holdFrames++;
-        if (state.holdFrames === state.holdThreshold) {
-          appendChar(result.char);
-          state.holdFrames = 0;
-        }
-      } else {
-        state.lastChar = result.char;
-        state.holdFrames = 0;
+  function loadModelFile(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      aslModel = JSON.parse(e.target.result);
+      
+      if (!aslModel.trees || !aslModel.classes) {
+        throw new Error('Invalid model format');
       }
-    } else {
-      confBadge.classList.remove('visible');
-      currentLetterEl.textContent = '?';
-      highlightAlpha(null);
-      state.lastChar = null;
-      state.holdFrames = 0;
+      
+      document.getElementById('modelStatus').innerHTML = 
+        `<span style="color:var(--accent)">✓ Loaded: ${aslModel.classes.length} letters, ${aslModel.trees.length} trees</span>`;
+      
+      showToast('ML model loaded! Recognition improved.');
+    } catch (err) {
+      showToast('Error: ' + err.message);
+      console.error(err);
     }
+  };
+  reader.readAsText(file);
+}
+let aslModel = null;
+const DEFAULT_MODEL = null; // We'll set this after training
+  function classifyASL(lms) {
+  // If we have a trained model, use ML prediction
+  if (aslModel && aslModel.trees) {
+    return predictASL(lms);
+  }
+  
+  // Fallback to old heuristic method
+  return classifyASLHeuristic(lms);
+}
+
+// ML Prediction using Random Forest
+function predictASL(landmarks) {
+  // Extract features: 21 landmarks × 3 coords = 63 features
+  // Normalize relative to wrist (landmark 0)
+  const wrist = landmarks[0];
+  const features = [];
+  
+  landmarks.forEach(lm => {
+    features.push(lm.x - wrist.x);
+    features.push(lm.y - wrist.y);
+    features.push(lm.z - wrist.z);
+  });
+  
+  // Get predictions from all trees
+  const votes = {};
+  for (const tree of aslModel.trees) {
+    const pred = predictTree(tree, features);
+    votes[pred] = (votes[pred] || 0) + 1;
+  }
+  
+  // Find majority vote
+  const totalVotes = aslModel.trees.length;
+  let bestPred = null;
+  let bestCount = 0;
+  
+  for (const [pred, count] of Object.entries(votes)) {
+    if (count > bestCount) {
+      bestCount = count;
+      bestPred = parseInt(pred);
+    }
+  }
+  
+  const confidence = bestCount / totalVotes;
+  
+  // Only return if confidence is high enough
+  if (confidence < 0.3) return null;
+  
+  const letter = aslModel.classes[bestPred];
+  return { char: letter, conf: confidence };
+}
+
+function predictTree(node, features) {
+  if (node.type === 'leaf') {
+    return node.prediction;
+  }
+  
+  if (features[node.feature] <= node.threshold) {
+    return predictTree(node.left, features);
   } else {
-    detectBadge.innerHTML = '<div class="status-dot detecting"></div><span>Scanning for hand…</span>';
-    confBadge.classList.remove('visible');
-    currentLetterEl.textContent = '—';
-    highlightAlpha(null);
-    setStatus('active', 'Camera on');
-    state.lastChar = null;
-    state.holdFrames = 0;
+    return predictTree(node.right, features);
   }
 }
 
-// ─── CAMERA ───────────────────────────────────────────────────────────────────
-function setStatus(type, text) {
-  statusDot.className = 'status-dot' + (type ? ' ' + type : '');
-  statusText.textContent = text;
-}
-
-async function startCamera() {
-  try {
-    const constraints = {
-      video: {
-        facingMode: state.cameraFacing,
-        width: { ideal: 1280 },
-        height: { ideal: 720 },
-      }
-    };
-    state.stream = await navigator.mediaDevices.getUserMedia(constraints);
-    videoEl.srcObject = state.stream;
-    await videoEl.play();
-
-    placeholder.style.display = 'none';
-    detectBadge.classList.add('visible');
-
-    // Resize canvas to match video
-    videoEl.onloadedmetadata = () => {
-      overlayCanvas.width = videoEl.videoWidth;
-      overlayCanvas.height = videoEl.videoHeight;
-    };
-
-    if (!hands) initHands();
-
-    // Use MediaPipe Camera
-    state.mpCamera = new Camera(videoEl, {
-      onFrame: async () => {
-        if (overlayCanvas.width !== videoEl.videoWidth) {
-          overlayCanvas.width = videoEl.videoWidth;
-          overlayCanvas.height = videoEl.videoHeight;
-        }
-        await hands.send({ image: videoEl });
-      },
-      width: 1280,
-      height: 720,
-    });
-    state.mpCamera.start();
-
-    state.cameraRunning = true;
-    startBtn.textContent = '⏹ Stop Camera';
-    startBtn.style.background = 'rgba(255,77,109,0.2)';
-    startBtn.style.borderColor = 'var(--danger)';
-    startBtn.style.color = 'var(--danger)';
-    setStatus('active', 'Camera on');
-  } catch (e) {
-    showToast('Camera error: ' + (e.message || 'Permission denied'));
-    setStatus('', 'Camera error');
-  }
-}
-
-function stopCamera() {
-  if (state.mpCamera) { state.mpCamera.stop(); state.mpCamera = null; }
-  if (state.stream) { state.stream.getTracks().forEach(t => t.stop()); state.stream = null; }
-  videoEl.srcObject = null;
-  ctx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
-  placeholder.style.display = 'flex';
-  detectBadge.classList.remove('visible');
-  confBadge.classList.remove('visible');
-  currentLetterEl.textContent = '—';
-  highlightAlpha(null);
-
-  state.cameraRunning = false;
-  startBtn.textContent = '▶ Start Camera';
-  startBtn.style.background = 'var(--accent)';
-  startBtn.style.borderColor = 'var(--accent)';
-  startBtn.style.color = '#050709';
-  setStatus('', 'Camera off');
-}
-
-function toggleCamera() {
-  state.cameraRunning ? stopCamera() : startCamera();
+// Rename your OLD classifyASL to this:
+function classifyASLHeuristic(lms) {
+  // ... paste your existing classifyASL code here ...
+  // (all the if/else rules you had before)
 }
 </script>
 </body>
