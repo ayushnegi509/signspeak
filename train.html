@@ -1,0 +1,837 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SignSpeak Trainer — Collect ASL Data</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@400;600;800&family=DM+Sans:wght@300;400;500&display=swap');
+
+  :root {
+    --bg: #0a0d12;
+    --surface: #111520;
+    --surface2: #181e2e;
+    --border: rgba(255,255,255,0.07);
+    --border2: rgba(255,255,255,0.14);
+    --accent: #4fffb0;
+    --accent2: #00e5ff;
+    --text: #f0f4ff;
+    --muted: #6b7a99;
+    --danger: #ff4d6d;
+    --warn: #ffb347;
+    --radius: 16px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1.25rem 2rem;
+    border-bottom: 1px solid var(--border);
+    background: rgba(10,13,18,0.8);
+  }
+
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .logo-icon {
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+  }
+
+  .logo-text {
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    font-size: 1.3rem;
+  }
+
+  main {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 1fr 400px;
+    gap: 0;
+    height: calc(100vh - 70px);
+  }
+
+  .video-section {
+    position: relative;
+    background: #050709;
+    display: flex;
+    flex-direction: column;
+  }
+
+  #videoEl {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transform: scaleX(-1);
+  }
+
+  #overlayCanvas {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    pointer-events: none;
+    transform: scaleX(-1);
+  }
+
+  .target-letter {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-family: 'Syne', sans-serif;
+    font-size: 180px;
+    font-weight: 800;
+    color: var(--accent);
+    opacity: 0.15;
+    pointer-events: none;
+    text-shadow: 0 0 60px var(--accent);
+  }
+
+  .controls-section {
+    padding: 1.5rem;
+    background: var(--surface);
+    border-left: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    overflow-y: auto;
+  }
+
+  .section-title {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--muted);
+    font-family: 'DM Mono', monospace;
+    margin-bottom: 0.75rem;
+  }
+
+  .letter-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 6px;
+  }
+
+  .letter-btn {
+    aspect-ratio: 1;
+    border: 1px solid var(--border);
+    background: var(--surface2);
+    color: var(--text);
+    border-radius: 8px;
+    font-family: 'Syne', sans-serif;
+    font-weight: 600;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .letter-btn:hover {
+    border-color: var(--border2);
+    background: rgba(255,255,255,0.05);
+  }
+
+  .letter-btn.active {
+    background: var(--accent);
+    color: #050709;
+    border-color: var(--accent);
+  }
+
+  .letter-btn.has-data {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  .capture-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .btn {
+    padding: 14px 20px;
+    border-radius: 12px;
+    border: 1px solid var(--border2);
+    background: var(--surface2);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+
+  .btn:hover {
+    background: rgba(255,255,255,0.06);
+  }
+
+  .btn.primary {
+    background: var(--accent);
+    color: #050709;
+    border-color: var(--accent);
+    font-weight: 600;
+    font-size: 16px;
+    padding: 18px;
+  }
+
+  .btn.primary:hover {
+    background: #3aeea0;
+    transform: scale(1.02);
+  }
+
+  .btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  .stats-box {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px;
+  }
+
+  .stat-row {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 8px;
+    font-size: 13px;
+  }
+
+  .stat-row:last-child {
+    margin-bottom: 0;
+    padding-top: 8px;
+    border-top: 1px solid var(--border);
+    font-weight: 600;
+  }
+
+  .progress-bar {
+    width: 100%;
+    height: 6px;
+    background: rgba(255,255,255,0.08);
+    border-radius: 3px;
+    overflow: hidden;
+    margin-top: 8px;
+  }
+
+  .progress-fill {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 3px;
+    transition: width 0.3s;
+  }
+
+  .preview-data {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    background: rgba(0,0,0,0.3);
+    padding: 12px;
+    border-radius: 8px;
+    max-height: 150px;
+    overflow-y: auto;
+    word-break: break-all;
+  }
+
+  .toast {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: var(--surface2);
+    border: 1px solid var(--border2);
+    border-radius: 100px;
+    padding: 12px 24px;
+    font-size: 14px;
+    color: var(--text);
+    opacity: 0;
+    transition: all 0.3s;
+    z-index: 100;
+  }
+
+  .toast.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+
+  .countdown {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-family: 'Syne', sans-serif;
+    font-size: 120px;
+    font-weight: 800;
+    color: var(--accent2);
+    text-shadow: 0 0 40px var(--accent2);
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+
+  .countdown.active {
+    opacity: 1;
+  }
+
+  .actions {
+    display: flex;
+    gap: 8px;
+  }
+
+  .actions .btn {
+    flex: 1;
+  }
+
+  .btn.danger {
+    color: var(--danger);
+    border-color: rgba(255,77,109,0.3);
+  }
+
+  .btn.danger:hover {
+    background: rgba(255,77,109,0.1);
+  }
+
+  @media (max-width: 900px) {
+    main { grid-template-columns: 1fr; grid-template-rows: 1fr auto; }
+    .video-section { height: 50vh; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon">🎯</div>
+    <div class="logo-text">SignSpeak <span style="color: var(--accent)">Trainer</span></div>
+  </div>
+  <div style="color: var(--muted); font-size: 13px;">
+    Collect training data for ML model
+  </div>
+</header>
+
+<main>
+  <div class="video-section">
+    <video id="videoEl" autoplay muted playsinline></video>
+    <canvas id="overlayCanvas"></canvas>
+    <div class="target-letter" id="targetLetter">A</div>
+    <div class="countdown" id="countdown">3</div>
+  </div>
+
+  <div class="controls-section">
+    <div>
+      <div class="section-title">Select Letter</div>
+      <div class="letter-grid" id="letterGrid"></div>
+    </div>
+
+    <div class="capture-controls">
+      <div class="section-title">Capture Samples</div>
+      <button class="btn primary" id="captureBtn" onclick="startCapture()" disabled>
+        📸 Capture 10 Samples
+      </button>
+      <div class="actions">
+        <button class="btn" onclick="downloadDataset()">💾 Save Dataset</button>
+        <button class="btn danger" onclick="clearCurrent()">🗑 Clear Letter</button>
+      </div>
+    </div>
+
+    <div class="stats-box">
+      <div class="section-title">Dataset Statistics</div>
+      <div class="stat-row">
+        <span>Current Letter</span>
+        <span id="currentCount" style="color: var(--accent); font-weight: 600;">0 samples</span>
+      </div>
+      <div class="stat-row">
+        <span>Total Collected</span>
+        <span id="totalCount" style="color: var(--accent2); font-weight: 600;">0 samples</span>
+      </div>
+      <div class="progress-bar">
+        <div class="progress-fill" id="progressBar" style="width: 0%"></div>
+      </div>
+      <div style="margin-top: 8px; font-size: 11px; color: var(--muted);">
+        Goal: 260 samples (10 per letter)
+      </div>
+    </div>
+
+    <div>
+      <div class="section-title">Last Sample Preview</div>
+      <div class="preview-data" id="previewData">No data captured yet</div>
+    </div>
+
+    <div style="margin-top: auto;">
+      <button class="btn primary" onclick="trainAndExport()" style="width: 100%;">
+        🤖 Train Model & Export
+      </button>
+    </div>
+  </div>
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+
+<script>
+// State
+const state = {
+  currentLetter: 'A',
+  dataset: {}, // { 'A': [[landmarks], ...], 'B': ... }
+  isCapturing: false,
+  captureCount: 0,
+  targetCaptures: 10,
+  handDetected: false,
+  currentLandmarks: null
+};
+
+const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
+
+// UI Refs
+const videoEl = document.getElementById('videoEl');
+const overlayCanvas = document.getElementById('overlayCanvas');
+const ctx = overlayCanvas.getContext('2d');
+const targetLetterEl = document.getElementById('targetLetter');
+const countdownEl = document.getElementById('countdown');
+const captureBtn = document.getElementById('captureBtn');
+
+// Initialize letter grid
+const letterGrid = document.getElementById('letterGrid');
+LETTERS.forEach(letter => {
+  const btn = document.createElement('button');
+  btn.className = 'letter-btn';
+  btn.textContent = letter;
+  btn.id = `btn-${letter}`;
+  btn.onclick = () => selectLetter(letter);
+  letterGrid.appendChild(btn);
+});
+
+// Select letter
+function selectLetter(letter) {
+  state.currentLetter = letter;
+  targetLetterEl.textContent = letter;
+  
+  // Update UI
+  document.querySelectorAll('.letter-btn').forEach(btn => {
+    btn.classList.remove('active');
+  });
+  document.getElementById(`btn-${letter}`).classList.add('active');
+  
+  updateStats();
+  updateCaptureButton();
+}
+
+// Initialize MediaPipe Hands
+let hands;
+let camera;
+
+function initHands() {
+  hands = new Hands({
+    locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+  });
+  
+  hands.setOptions({
+    maxNumHands: 1,
+    modelComplexity: 1,
+    minDetectionConfidence: 0.7,
+    minTrackingConfidence: 0.6,
+  });
+  
+  hands.onResults(onHandResults);
+}
+
+function onHandResults(results) {
+  const w = overlayCanvas.width;
+  const h = overlayCanvas.height;
+  ctx.clearRect(0, 0, w, h);
+  
+  if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+    state.handDetected = true;
+    state.currentLandmarks = results.multiHandLandmarks[0];
+    drawLandmarks(state.currentLandmarks, w, h);
+    updateCaptureButton();
+  } else {
+    state.handDetected = false;
+    state.currentLandmarks = null;
+    updateCaptureButton();
+  }
+}
+
+function drawLandmarks(lms, w, h) {
+  const pts = lms.map(p => ({ x: p.x * w, y: p.y * h }));
+  
+  // Draw connections
+  const connections = [
+    [0,1],[1,2],[2,3],[3,4],
+    [0,5],[5,6],[6,7],[7,8],
+    [5,9],[9,10],[10,11],[11,12],
+    [9,13],[13,14],[14,15],[15,16],
+    [13,17],[17,18],[18,19],[19,20],
+    [0,17]
+  ];
+  
+  ctx.strokeStyle = 'rgba(79,255,176,0.6)';
+  ctx.lineWidth = 2;
+  
+  connections.forEach(([a, b]) => {
+    ctx.beginPath();
+    ctx.moveTo(pts[a].x, pts[a].y);
+    ctx.lineTo(pts[b].x, pts[b].y);
+    ctx.stroke();
+  });
+  
+  // Draw points
+  pts.forEach((p, i) => {
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, i === 0 ? 8 : 5, 0, Math.PI * 2);
+    ctx.fillStyle = i === 0 ? '#4fffb0' : '#00e5ff';
+    ctx.fill();
+  });
+}
+
+// Start camera
+async function startCamera() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { width: 1280, height: 720, facingMode: 'user' }
+    });
+    videoEl.srcObject = stream;
+    
+    await videoEl.play();
+    
+    overlayCanvas.width = videoEl.videoWidth;
+    overlayCanvas.height = videoEl.videoHeight;
+    
+    if (!hands) initHands();
+    
+    camera = new Camera(videoEl, {
+      onFrame: async () => {
+        if (overlayCanvas.width !== videoEl.videoWidth) {
+          overlayCanvas.width = videoEl.videoWidth;
+          overlayCanvas.height = videoEl.videoHeight;
+        }
+        await hands.send({ image: videoEl });
+      },
+      width: 1280,
+      height: 720
+    });
+    
+    camera.start();
+    selectLetter('A');
+    
+  } catch (err) {
+    showToast('Camera error: ' + err.message);
+  }
+}
+
+// Capture samples
+async function startCapture() {
+  if (!state.handDetected) {
+    showToast('No hand detected!');
+    return;
+  }
+  
+  state.isCapturing = true;
+  state.captureCount = 0;
+  captureBtn.disabled = true;
+  
+  // Countdown then capture
+  for (let i = 3; i > 0; i--) {
+    countdownEl.textContent = i;
+    countdownEl.classList.add('active');
+    await sleep(1000);
+  }
+  
+  countdownEl.classList.remove('active');
+  
+  // Capture samples with small delays
+  for (let i = 0; i < state.targetCaptures; i++) {
+    if (state.handDetected && state.currentLandmarks) {
+      captureSample();
+      countdownEl.textContent = state.captureCount;
+      countdownEl.classList.add('active');
+      await sleep(200);
+      countdownEl.classList.remove('active');
+      await sleep(300);
+    } else {
+      showToast('Hand lost during capture!');
+      break;
+    }
+  }
+  
+  state.isCapturing = false;
+  updateStats();
+  updateCaptureButton();
+  showToast(`Captured ${state.captureCount} samples for ${state.currentLetter}`);
+}
+
+function captureSample() {
+  if (!state.dataset[state.currentLetter]) {
+    state.dataset[state.currentLetter] = [];
+  }
+  
+  // Extract features: 21 landmarks × 3 coordinates = 63 features
+  // Normalize relative to wrist (landmark 0)
+  const wrist = state.currentLandmarks[0];
+  const features = [];
+  
+  state.currentLandmarks.forEach(lm => {
+    features.push(lm.x - wrist.x); // Relative X
+    features.push(lm.y - wrist.y); // Relative Y
+    features.push(lm.z - wrist.z); // Relative Z
+  });
+  
+  state.dataset[state.currentLetter].push(features);
+  state.captureCount++;
+  
+  // Update preview
+  document.getElementById('previewData').textContent = 
+    `Letter: ${state.currentLetter}\n` +
+    `Sample: ${state.captureCount}/${state.targetCaptures}\n` +
+    `Features: ${features.length} values\n` +
+    `First 5: ${features.slice(0, 5).map(f => f.toFixed(3)).join(', ')}...`;
+  
+  // Mark letter as having data
+  const btn = document.getElementById(`btn-${state.currentLetter}`);
+  btn.classList.add('has-data');
+}
+
+function updateStats() {
+  const currentData = state.dataset[state.currentLetter] || [];
+  const totalData = Object.values(state.dataset).reduce((a, b) => a + b.length, 0);
+  
+  document.getElementById('currentCount').textContent = `${currentData.length} samples`;
+  document.getElementById('totalCount').textContent = `${totalData} samples`;
+  
+  const progress = (totalData / (LETTERS.length * 10)) * 100;
+  document.getElementById('progressBar').style.width = `${Math.min(progress, 100)}%`;
+}
+
+function updateCaptureButton() {
+  if (state.isCapturing) {
+    captureBtn.disabled = true;
+    captureBtn.textContent = 'Capturing...';
+  } else {
+    captureBtn.disabled = !state.handDetected;
+    captureBtn.textContent = `📸 Capture ${state.targetCaptures} Samples`;
+  }
+}
+
+function clearCurrent() {
+  if (state.dataset[state.currentLetter]) {
+    delete state.dataset[state.currentLetter];
+    document.getElementById(`btn-${state.currentLetter}`).classList.remove('has-data');
+    updateStats();
+    showToast(`Cleared data for ${state.currentLetter}`);
+  }
+}
+
+function downloadDataset() {
+  const dataStr = JSON.stringify(state.dataset, null, 2);
+  const blob = new Blob([dataStr], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `asl_dataset_${Date.now()}.json`;
+  a.click();
+  showToast('Dataset downloaded!');
+}
+
+// Train and export model
+async function trainAndExport() {
+  const totalSamples = Object.values(state.dataset).reduce((a, b) => a + b.length, 0);
+  if (totalSamples < 26) {
+    showToast('Need at least 1 sample per letter!');
+    return;
+  }
+  
+  showToast('Training model... (this may take a moment)');
+  
+  // Prepare training data
+  const X = [];
+  const y = [];
+  
+  LETTERS.forEach((letter, idx) => {
+    if (state.dataset[letter]) {
+      state.dataset[letter].forEach(sample => {
+        X.push(sample);
+        y.push(idx); // 0-25 for A-Z
+      });
+    }
+  });
+  
+  // Simple Random Forest implementation
+  const model = trainRandomForest(X, y);
+  
+  // Export model
+  const modelData = {
+    type: 'random_forest',
+    trees: model.trees,
+    classes: LETTERS,
+    featureCount: 63,
+    created: new Date().toISOString()
+  };
+  
+  const modelStr = JSON.stringify(modelData);
+  const blob = new Blob([modelStr], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `asl_model_${Date.now()}.json`;
+  a.click();
+  
+  showToast(`Model trained with ${totalSamples} samples! Downloaded.`);
+}
+
+// Simple Random Forest trainer (runs in browser)
+function trainRandomForest(X, y, nTrees = 50) {
+  const trees = [];
+  const nSamples = X.length;
+  const nFeatures = X[0].length;
+  
+  for (let t = 0; t < nTrees; t++) {
+    // Bootstrap sample
+    const sampleIdx = [];
+    for (let i = 0; i < nSamples; i++) {
+      sampleIdx.push(Math.floor(Math.random() * nSamples));
+    }
+    
+    const tree = buildDecisionTree(X, y, sampleIdx, nFeatures, 0, 10);
+    trees.push(tree);
+  }
+  
+  return { trees };
+}
+
+function buildDecisionTree(X, y, samples, nFeatures, depth, maxDepth) {
+  // Check stopping conditions
+  const labels = samples.map(i => y[i]);
+  const uniqueLabels = [...new Set(labels)];
+  
+  if (uniqueLabels.length === 1 || depth >= maxDepth || samples.length < 5) {
+    // Leaf node: return majority class
+    const counts = {};
+    labels.forEach(l => counts[l] = (counts[l] || 0) + 1);
+    const majority = Object.entries(counts).sort((a, b) => b[1] - a[1])[0][0];
+    return { type: 'leaf', prediction: parseInt(majority) };
+  }
+  
+  // Find best split
+  const featureSubset = [];
+  const nToTry = Math.floor(Math.sqrt(nFeatures));
+  while (featureSubset.length < nToTry) {
+    const f = Math.floor(Math.random() * nFeatures);
+    if (!featureSubset.includes(f)) featureSubset.push(f);
+  }
+  
+  let bestGain = -1;
+  let bestFeature = null;
+  let bestThreshold = null;
+  
+  for (const feature of featureSubset) {
+    const values = samples.map(i => X[i][feature]).sort((a, b) => a - b);
+    const thresholds = values.filter((v, i, a) => i === 0 || v !== a[i-1]);
+    
+    for (const threshold of thresholds.slice(1, -1)) {
+      const left = samples.filter(i => X[i][feature] <= threshold);
+      const right = samples.filter(i => X[i][feature] > threshold);
+      
+      if (left.length === 0 || right.length === 0) continue;
+      
+      const gain = informationGain(labels, 
+        left.map(i => y[i]), 
+        right.map(i => y[i])
+      );
+      
+      if (gain > bestGain) {
+        bestGain = gain;
+        bestFeature = feature;
+        bestThreshold = threshold;
+      }
+    }
+  }
+  
+  if (bestFeature === null) {
+    const counts = {};
+    labels.forEach(l => counts[l] = (counts[l] || 0) + 1);
+    const majority = Object.entries(counts).sort((a, b) => b[1] - a[1])[0][0];
+    return { type: 'leaf', prediction: parseInt(majority) };
+  }
+  
+  const leftSamples = samples.filter(i => X[i][bestFeature] <= bestThreshold);
+  const rightSamples = samples.filter(i => X[i][bestFeature] > bestThreshold);
+  
+  return {
+    type: 'split',
+    feature: bestFeature,
+    threshold: bestThreshold,
+    left: buildDecisionTree(X, y, leftSamples, nFeatures, depth + 1, maxDepth),
+    right: buildDecisionTree(X, y, rightSamples, nFeatures, depth + 1, maxDepth)
+  };
+}
+
+function informationGain(parentLabels, leftLabels, rightLabels) {
+  const parentEntropy = entropy(parentLabels);
+  const n = parentLabels.length;
+  const nLeft = leftLabels.length;
+  const nRight = rightLabels.length;
+  
+  const childEntropy = (nLeft / n) * entropy(leftLabels) + 
+                       (nRight / n) * entropy(rightLabels);
+  
+  return parentEntropy - childEntropy;
+}
+
+function entropy(labels) {
+  const counts = {};
+  labels.forEach(l => counts[l] = (counts[l] || 0) + 1);
+  const n = labels.length;
+  
+  let e = 0;
+  for (const count of Object.values(counts)) {
+    const p = count / n;
+    e -= p * Math.log2(p);
+  }
+  return e;
+}
+
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+// Start
+startCamera();
+</script>
+
+</body>
+</html>
