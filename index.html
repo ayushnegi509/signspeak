@@ -652,6 +652,18 @@
 
 <script>
 // ─── STATE ────────────────────────────────────────────────────────────────────
+  // More precise finger detection
+function isFingerExtended(tip, pip, wrist) {
+  // Check if tip is farther from wrist than pip
+  const tipDist = Math.hypot(lms[tip].x - lms[wrist].x, lms[tip].y - lms[wrist].y);
+  const pipDist = Math.hypot(lms[pip].x - lms[wrist].x, lms[pip].y - lms[wrist].y);
+  return tipDist > pipDist;
+}
+
+// Check if fingers are touching
+function areFingersTouching(tip1, tip2, threshold = 0.05) {
+  return dist(tip1, tip2) < threshold;
+}
 const state = {
   cameraRunning: false,
   currentChar: null,
@@ -921,6 +933,68 @@ function classifyASL(lms) {
   // L shape
   if (indexExt && thumbExtR && !middleExt && !ringExt && !pinkyExt) return { char: 'L', conf: 0.80 };
   if (indexExt && thumbExtL && !middleExt && !ringExt && !pinkyExt) return { char: 'L', conf: 0.80 };
+
+  // C - Curved hand (fingers curved, open palm, thumb away)
+const fingersCurled = indexCurl && middleCurl && ringCurl && pinkyCurl;
+const thumbOpen = dist(4, 17) > 0.15; // Thumb away from pinky base
+if (fingersCurled && thumbOpen && lms[8].x > lms[5].x) {
+  return { char: 'C', conf: 0.75 };
+}
+
+// E - Fingers curled tight, thumb across palm
+if (fingersCurled && (thumbExtR || thumbExtL) && dist(4, 9) < 0.08) {
+  return { char: 'E', conf: 0.72 };
+}
+
+// F - Index touches thumb, others extended
+if (indexCurl && middleExt && ringExt && pinkyExt && dist(4, 8) < 0.05) {
+  return { char: 'F', conf: 0.78 };
+}
+
+// K - Index and middle up in V, thumb up between them
+if (indexExt && middleExt && ringCurl && pinkyCurl && thumbUp && lms[4].y < lms[10].y) {
+  return { char: 'K', conf: 0.74 };
+}
+
+// M - All fingers curled over thumb
+if (fingersCurled && !thumbUp && dist(12, 2) < 0.1) {
+  return { char: 'M', conf: 0.70 };
+}
+
+// N - Similar to M but different thumb position
+if (fingersCurled && !thumbUp && dist(12, 2) > 0.08 && dist(12, 2) < 0.15) {
+  return { char: 'N', conf: 0.70 };
+}
+
+// P - Index down, middle up, thumb up (K rotated down)
+if (!indexExt && middleExt && ringCurl && pinkyCurl && lms[8].y > lms[5].y) {
+  return { char: 'P', conf: 0.73 };
+}
+
+// Q - Thumb and index pinch, pointing down
+if (indexCurl && !thumbUp && lms[8].y > lms[0].y && dist(4, 8) < 0.06) {
+  return { char: 'Q', conf: 0.71 };
+}
+
+// R - Crossed fingers (index over middle)
+if (indexExt && middleExt && ringCurl && pinkyCurl && lms[8].x < lms[12].x) {
+  return { char: 'R', conf: 0.76 };
+}
+
+// S - Fist with thumb over fingers (all curled)
+if (fingersCurled && !thumbUp && dist(4, 9) < 0.1 && dist(4, 5) < 0.1) {
+  return { char: 'S', conf: 0.74 };
+}
+
+// T - Thumb between index and middle
+if (fingersCurled && !thumbUp && lms[4].x > lms[5].x && lms[4].x < lms[9].x) {
+  return { char: 'T', conf: 0.72 };
+}
+
+// X - Index bent, others curled
+if (!indexExt && !indexCurl && middleCurl && ringCurl && pinkyCurl) {
+  return { char: 'X', conf: 0.73 };
+}
 
   return null;
 }
