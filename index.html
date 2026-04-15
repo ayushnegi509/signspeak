@@ -240,6 +240,16 @@
         <button class="btn" onclick="clearLetter()" style="flex: 1; color: var(--danger);">🗑 Clear</button>
       </div>
     </div>
+    <div class="sidebar-section">
+  <div class="section-label">ML Model</div>
+  <input type="file" id="modelUpload" accept=".json" style="display:none" onchange="loadModel(event)">
+  <button class="btn" onclick="document.getElementById('modelUpload').click()" style="width:100%">
+    📁 Load Trained Model
+  </button>
+  <div id="modelStatus" style="font-size:11px;color:var(--muted);margin-top:8px;font-family:'DM Mono',monospace">
+    Using rule-based detection
+  </div>
+</div>
     
     <div class="stats-box">
       <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
