@@ -280,6 +280,36 @@
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
 
 <script>
+  function loadModel(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const model = JSON.parse(e.target.result);
+      
+      // Validate it's a proper model
+      if (!model.trees || !model.classes) {
+        throw new Error('Invalid model format');
+      }
+      
+      // Store in your state (make sure this matches your state variable name)
+      state.aslModel = model; // or just aslModel = model; depending on your code
+      
+      // Update UI
+      document.getElementById('modelStatus').innerHTML = 
+        `<span style="color:var(--accent)">✓ Loaded: ${model.classes.length} letters, ${model.trees.length} trees</span>`;
+      
+      alert('Model loaded successfully! Recognition improved.');
+      
+    } catch (err) {
+      alert('Error loading model: ' + err.message);
+      console.error(err);
+    }
+  };
+  reader.readAsText(file);
+}
 const state = {
   currentLetter: 'A',
   dataset: {},
