@@ -3,28 +3,24 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SignSpeak — Real-Time Sign Language Recognition</title>
+<title>SignSpeak Trainer</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@400;600;800&family=DM+Sans:wght@300;400;500&display=swap');
-
-  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
+  
   :root {
     --bg: #0a0d12;
     --surface: #111520;
     --surface2: #181e2e;
     --border: rgba(255,255,255,0.07);
-    --border2: rgba(255,255,255,0.14);
     --accent: #4fffb0;
     --accent2: #00e5ff;
     --text: #f0f4ff;
     --muted: #6b7a99;
     --danger: #ff4d6d;
-    --warn: #ffb347;
-    --radius: 16px;
-    --radius-sm: 8px;
   }
-
+  
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  
   body {
     background: var(--bg);
     color: var(--text);
@@ -32,129 +28,45 @@
     min-height: 100vh;
     display: flex;
     flex-direction: column;
-    overflow-x: hidden;
   }
-
-  /* Ambient background glow */
-  body::before {
-    content: '';
-    position: fixed;
-    top: -30%;
-    left: -10%;
-    width: 60vw;
-    height: 60vw;
-    background: radial-gradient(ellipse, rgba(79,255,176,0.04) 0%, transparent 70%);
-    pointer-events: none;
-    z-index: 0;
-  }
-  body::after {
-    content: '';
-    position: fixed;
-    bottom: -20%;
-    right: -10%;
-    width: 50vw;
-    height: 50vw;
-    background: radial-gradient(ellipse, rgba(0,229,255,0.04) 0%, transparent 70%);
-    pointer-events: none;
-    z-index: 0;
-  }
-
-  /* HEADER */
+  
   header {
-    position: relative;
-    z-index: 10;
+    padding: 1.25rem 2rem;
+    border-bottom: 1px solid var(--border);
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 1.25rem 2rem;
-    border-bottom: 1px solid var(--border);
-    backdrop-filter: blur(10px);
     background: rgba(10,13,18,0.8);
   }
-
+  
   .logo {
     display: flex;
     align-items: center;
     gap: 12px;
-  }
-
-  .logo-icon {
-    width: 38px;
-    height: 38px;
-    border-radius: 10px;
-    background: linear-gradient(135deg, var(--accent), var(--accent2));
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 18px;
-  }
-
-  .logo-text {
     font-family: 'Syne', sans-serif;
     font-weight: 800;
     font-size: 1.3rem;
-    letter-spacing: -0.03em;
-    color: var(--text);
   }
-  .logo-text span { color: var(--accent); }
-
-  .status-pill {
-    display: flex;
-    align-items: center;
-    gap: 7px;
-    background: var(--surface2);
-    border: 1px solid var(--border2);
-    border-radius: 100px;
-    padding: 6px 14px;
-    font-size: 12px;
-    font-family: 'DM Mono', monospace;
-    color: var(--muted);
-  }
-  .status-dot {
-    width: 7px; height: 7px;
-    border-radius: 50%;
-    background: var(--muted);
-    transition: all 0.3s;
-  }
-  .status-dot.active { background: var(--accent); box-shadow: 0 0 8px var(--accent); }
-  .status-dot.detecting { background: var(--accent2); box-shadow: 0 0 8px var(--accent2); animation: pulse 1.2s infinite; }
-
-  @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.4; } }
-
-  /* MAIN LAYOUT */
+  
   main {
-    position: relative;
-    z-index: 2;
     flex: 1;
     display: grid;
-    grid-template-columns: 1fr 340px;
-    gap: 0;
-    height: calc(100vh - 68px);
+    grid-template-columns: 1fr 400px;
+    height: calc(100vh - 70px);
   }
-
-  /* VIDEO COLUMN */
-  .video-col {
-    display: flex;
-    flex-direction: column;
-    border-right: 1px solid var(--border);
-    overflow: hidden;
-  }
-
-  .video-area {
-    flex: 1;
+  
+  .video-section {
     position: relative;
     background: #050709;
-    overflow: hidden;
   }
-
+  
   #videoEl {
     width: 100%;
     height: 100%;
     object-fit: cover;
     transform: scaleX(-1);
-    display: block;
   }
-
+  
   #overlayCanvas {
     position: absolute;
     top: 0; left: 0;
@@ -162,604 +74,517 @@
     pointer-events: none;
     transform: scaleX(-1);
   }
-
-  .video-placeholder {
+  
+  .target-letter {
     position: absolute;
-    inset: 0;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 16px;
-    background: radial-gradient(ellipse at center, #0d1220 0%, #050709 100%);
-  }
-  .video-placeholder .icon { font-size: 48px; opacity: 0.3; }
-  .video-placeholder p {
-    font-size: 14px;
-    color: var(--muted);
-    text-align: center;
-    max-width: 200px;
-    line-height: 1.6;
-  }
-
-  /* Detection badge overlay */
-  .detect-badge {
-    position: absolute;
-    top: 16px;
-    left: 16px;
-    background: rgba(10,13,18,0.85);
-    border: 1px solid var(--border2);
-    border-radius: 100px;
-    padding: 6px 14px;
-    font-family: 'DM Mono', monospace;
-    font-size: 11px;
-    color: var(--muted);
-    backdrop-filter: blur(8px);
-    display: none;
-  }
-  .detect-badge.visible { display: flex; align-items: center; gap: 8px; }
-
-  /* Confidence meter */
-  .conf-badge {
-    position: absolute;
-    top: 16px;
-    right: 16px;
-    background: rgba(10,13,18,0.85);
-    border: 1px solid var(--border2);
-    border-radius: var(--radius-sm);
-    padding: 8px 14px;
-    backdrop-filter: blur(8px);
-    display: none;
-    flex-direction: column;
-    gap: 4px;
-    min-width: 120px;
-  }
-  .conf-badge.visible { display: flex; }
-  .conf-label { font-size: 10px; color: var(--muted); font-family: 'DM Mono', monospace; text-transform: uppercase; letter-spacing: 0.08em; }
-  .conf-val { font-size: 20px; font-family: 'Syne', sans-serif; font-weight: 600; color: var(--accent); }
-  .conf-bar-bg { background: rgba(255,255,255,0.08); border-radius: 2px; height: 3px; overflow: hidden; }
-  .conf-bar { height: 100%; background: var(--accent); border-radius: 2px; transition: width 0.3s; }
-
-  /* TEXT OUTPUT ROW */
-  .text-output-row {
-    padding: 1.25rem 1.5rem;
-    border-top: 1px solid var(--border);
-    background: var(--surface);
-    display: flex;
-    align-items: center;
-    gap: 12px;
-  }
-
-  .current-letter-display {
-    width: 60px;
-    height: 60px;
-    flex-shrink: 0;
-    border-radius: 12px;
-    background: var(--surface2);
-    border: 1px solid var(--border2);
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
     font-family: 'Syne', sans-serif;
+    font-size: 150px;
     font-weight: 800;
-    font-size: 2rem;
     color: var(--accent);
-    position: relative;
-    overflow: hidden;
-    transition: all 0.2s;
-  }
-  .current-letter-display.pop {
-    animation: letterPop 0.25s ease;
-  }
-  @keyframes letterPop {
-    0% { transform: scale(1); }
-    50% { transform: scale(1.15); background: rgba(79,255,176,0.12); border-color: var(--accent); }
-    100% { transform: scale(1); }
-  }
-  .current-letter-display::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    border-radius: inherit;
-    background: linear-gradient(135deg, rgba(79,255,176,0.08), transparent);
+    opacity: 0.2;
     pointer-events: none;
   }
-
-  .word-box {
-    flex: 1;
-    background: var(--surface2);
-    border: 1px solid var(--border2);
-    border-radius: 12px;
-    padding: 10px 16px;
-    min-height: 60px;
-    display: flex;
-    align-items: center;
-    overflow: hidden;
-  }
-  #wordDisplay {
-    font-family: 'DM Mono', monospace;
-    font-size: 1.5rem;
-    font-weight: 500;
-    color: var(--text);
-    letter-spacing: 0.05em;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-  #wordDisplay .cursor {
-    display: inline-block;
-    width: 2px;
-    height: 1.4em;
-    background: var(--accent);
-    margin-left: 3px;
-    vertical-align: middle;
-    animation: blink 1s step-end infinite;
-  }
-  @keyframes blink { 50% { opacity: 0; } }
-
-  /* SIDEBAR */
-  .sidebar {
+  
+  .controls {
+    padding: 1.5rem;
+    background: var(--surface);
+    border-left: 1px solid var(--border);
     display: flex;
     flex-direction: column;
-    overflow: hidden;
+    gap: 1.5rem;
+    overflow-y: auto;
   }
-
-  .sidebar-section {
-    padding: 1.25rem 1.5rem;
-    border-bottom: 1px solid var(--border);
-  }
-
-  .sidebar-section:last-child { border-bottom: none; flex: 1; overflow: hidden; }
-
-  .section-label {
-    font-size: 10px;
+  
+  .section-title {
+    font-size: 11px;
     text-transform: uppercase;
     letter-spacing: 0.12em;
     color: var(--muted);
     font-family: 'DM Mono', monospace;
-    margin-bottom: 1rem;
+    margin-bottom: 0.75rem;
   }
-
-  /* CONTROLS */
-  .control-grid {
+  
+  .letter-grid {
     display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 8px;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 6px;
   }
-
-  .btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 7px;
-    padding: 10px 14px;
-    border-radius: 10px;
-    font-size: 13px;
-    font-family: 'DM Sans', sans-serif;
-    font-weight: 500;
-    cursor: pointer;
-    border: 1px solid var(--border2);
+  
+  .letter-btn {
+    aspect-ratio: 1;
+    border: 1px solid var(--border);
     background: var(--surface2);
     color: var(--text);
-    transition: all 0.18s;
-    white-space: nowrap;
+    border-radius: 8px;
+    font-family: 'Syne', sans-serif;
+    font-weight: 600;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.15s;
   }
-  .btn:hover { background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.2); }
-  .btn:active { transform: scale(0.97); }
-
+  
+  .letter-btn:hover { border-color: var(--accent); }
+  .letter-btn.active { background: var(--accent); color: #050709; }
+  .letter-btn.has-data { border-color: var(--accent); color: var(--accent); }
+  
+  .btn {
+    padding: 14px;
+    border-radius: 12px;
+    border: 1px solid rgba(255,255,255,0.1);
+    background: var(--surface2);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    width: 100%;
+    transition: all 0.15s;
+  }
+  
+  .btn:hover { background: rgba(255,255,255,0.06); }
   .btn.primary {
     background: var(--accent);
     color: #050709;
-    border-color: var(--accent);
     font-weight: 600;
-    grid-column: span 2;
   }
-  .btn.primary:hover { background: #3aeea0; }
-
-  .btn.danger { color: var(--danger); border-color: rgba(255,77,109,0.3); }
-  .btn.danger:hover { background: rgba(255,77,109,0.1); }
-
-  /* SENSITIVITY SLIDER */
-  .slider-row {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-  }
-  .slider-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-  }
-  .slider-header span:first-child { font-size: 13px; color: var(--text); }
-  .slider-val {
-    font-family: 'DM Mono', monospace;
-    font-size: 12px;
-    color: var(--accent);
-    background: rgba(79,255,176,0.1);
-    padding: 2px 8px;
-    border-radius: 4px;
-  }
-
-  input[type=range] {
+  
+  .progress-bar {
     width: 100%;
-    height: 4px;
-    -webkit-appearance: none;
-    background: var(--surface);
-    border-radius: 2px;
-    outline: none;
-    cursor: pointer;
+    height: 6px;
+    background: rgba(255,255,255,0.08);
+    border-radius: 3px;
+    overflow: hidden;
   }
-  input[type=range]::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    width: 16px;
-    height: 16px;
-    border-radius: 50%;
+  
+  .progress-fill {
+    height: 100%;
     background: var(--accent);
-    cursor: pointer;
+    border-radius: 3px;
+    transition: width 0.3s;
   }
-
-  /* SAVED PHRASES */
-  .saved-list {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    overflow-y: auto;
-    max-height: 180px;
-    scrollbar-width: thin;
-    scrollbar-color: var(--border2) transparent;
-  }
-
-  .saved-item {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
+  
+  input[type="file"] { display: none; }
+  
+  .stats-box {
     background: var(--surface2);
     border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 8px 12px;
-    font-family: 'DM Mono', monospace;
-    font-size: 12px;
-    color: var(--text);
-    animation: slideIn 0.2s ease;
-    cursor: pointer;
-    transition: border-color 0.15s;
-  }
-  .saved-item:hover { border-color: var(--border2); }
-  .saved-item span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .del-btn {
-    background: none;
-    border: none;
-    color: var(--muted);
-    cursor: pointer;
-    font-size: 14px;
-    line-height: 1;
-    padding: 0 2px;
-    transition: color 0.15s;
-  }
-  .del-btn:hover { color: var(--danger); }
-  .empty-saved {
-    font-size: 12px;
-    color: var(--muted);
-    text-align: center;
-    padding: 1rem 0;
-    font-family: 'DM Mono', monospace;
-  }
-
-  @keyframes slideIn { from { opacity:0; transform: translateX(8px); } to { opacity:1; transform: translateX(0); } }
-
-  /* ALPHABET REFERENCE */
-  .alphabet-grid {
-    display: grid;
-    grid-template-columns: repeat(7, 1fr);
-    gap: 4px;
-  }
-  .alpha-cell {
-    background: var(--surface2);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-family: 'Syne', sans-serif;
-    font-weight: 600;
+    border-radius: 12px;
+    padding: 16px;
     font-size: 13px;
-    padding: 7px 0;
-    color: var(--muted);
-    transition: all 0.15s;
-    cursor: default;
   }
-  .alpha-cell.highlight {
-    background: rgba(79,255,176,0.12);
-    border-color: var(--accent);
-    color: var(--accent);
-  }
-  .alpha-cell.space { font-size: 8px; letter-spacing: 0.05em; text-transform: uppercase; }
-
-  /* CAMERA SOURCE TOGGLE */
-  .source-tabs {
-    display: flex;
-    gap: 4px;
-    background: var(--surface2);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 3px;
-  }
-  .source-tab {
-    flex: 1;
-    padding: 7px;
-    border-radius: 7px;
-    background: none;
-    border: none;
-    font-size: 12px;
-    font-family: 'DM Sans', sans-serif;
-    color: var(--muted);
-    cursor: pointer;
-    transition: all 0.15s;
-    text-align: center;
-  }
-  .source-tab.active {
-    background: var(--surface);
-    border: 1px solid var(--border2);
-    color: var(--text);
-  }
-
-  /* TOAST */
+  
   .toast {
     position: fixed;
     bottom: 24px;
     left: 50%;
     transform: translateX(-50%) translateY(20px);
     background: var(--surface2);
-    border: 1px solid var(--border2);
+    border: 1px solid var(--border);
     border-radius: 100px;
-    padding: 10px 20px;
-    font-size: 13px;
-    color: var(--text);
-    backdrop-filter: blur(12px);
+    padding: 12px 24px;
     opacity: 0;
     transition: all 0.3s;
     z-index: 100;
-    pointer-events: none;
-    white-space: nowrap;
   }
-  .toast.show {
-    opacity: 1;
-    transform: translateX(-50%) translateY(0);
-  }
-
-  /* Responsive */
-  @media (max-width: 800px) {
-    main { grid-template-columns: 1fr; grid-template-rows: auto 1fr; height: auto; }
-    .video-col { border-right: none; border-bottom: 1px solid var(--border); }
-    .video-area { height: 55vw; min-height: 220px; }
-    .sidebar { max-height: 60vh; overflow-y: auto; }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  
+  @media (max-width: 900px) {
+    main { grid-template-columns: 1fr; }
+    .video-section { height: 50vh; }
   }
 </style>
 </head>
 <body>
 
 <header>
-  <div class="logo">
-    <div class="logo-icon">🤟</div>
-    <div class="logo-text">Sign<span>Speak</span></div>
-  </div>
-  <div id="statusPill" class="status-pill">
-    <div id="statusDot" class="status-dot"></div>
-    <span id="statusText">Camera off</span>
-  </div>
+  <div class="logo">🎯 SignSpeak <span style="color: var(--accent)">Trainer</span></div>
+  <div style="color: var(--muted); font-size: 13px;">Train ASL Recognition Model</div>
 </header>
 
 <main>
-  <!-- VIDEO COLUMN -->
-  <div class="video-col">
-    <div class="video-area" id="videoArea">
-      <div class="video-placeholder" id="placeholder">
-        <div class="icon">📷</div>
-        <p>Start the camera to begin sign language recognition</p>
-      </div>
-      <video id="videoEl" autoplay muted playsinline></video>
-      <canvas id="overlayCanvas"></canvas>
-
-      <div class="detect-badge visible" id="detectBadge">
-        <div class="status-dot detecting"></div>
-        <span id="detectText">Scanning for hand…</span>
-      </div>
-
-      <div class="conf-badge" id="confBadge">
-        <div class="conf-label">Confidence</div>
-        <div class="conf-val" id="confVal">—</div>
-        <div class="conf-bar-bg"><div class="conf-bar" id="confBar" style="width:0%"></div></div>
-      </div>
-    </div>
-
-    <div class="text-output-row">
-      <div class="current-letter-display" id="currentLetter">—</div>
-      <div class="word-box">
-        <div id="wordDisplay"><span id="wordText"></span><span class="cursor"></span></div>
-      </div>
-    </div>
+  <div class="video-section">
+    <video id="videoEl" autoplay muted playsinline></video>
+    <canvas id="overlayCanvas"></canvas>
+    <div class="target-letter" id="targetLetter">A</div>
   </div>
-
-  <!-- SIDEBAR -->
-  <div class="sidebar">
-
-    <!-- Camera source -->
-    <div class="sidebar-section">
-      <div class="section-label">Camera Source</div>
-      <div class="source-tabs">
-        <button class="source-tab active" id="tabWebcam" onclick="selectSource('user')">💻 Webcam</button>
-        <button class="source-tab" id="tabBT" onclick="selectSource('environment')">📱 Phone/BT</button>
+  
+  <div class="controls">
+    <div>
+      <div class="section-title">Select Letter</div>
+      <div class="letter-grid" id="letterGrid"></div>
+    </div>
+    
+    <div>
+      <div class="section-title">Input Source</div>
+      <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+        <button class="btn" onclick="useCamera()" style="flex: 1;">📷 Camera</button>
+        <button class="btn" onclick="document.getElementById('videoFile').click()" style="flex: 1;">🎬 Video File</button>
+        <input type="file" id="videoFile" accept="video/*" onchange="loadVideo(event)">
+      </div>
+      <div style="display: flex; gap: 8px;">
+        <button class="btn" onclick="togglePlay()">⏯ Play</button>
+        <button class="btn" onclick="stepFrame(-1)">⏮ Frame</button>
+        <button class="btn" onclick="stepFrame(1)">Frame ⏭</button>
       </div>
     </div>
-
-    <!-- Controls -->
-    <div class="sidebar-section">
-      <div class="section-label">Controls</div>
-      <div class="control-grid">
-        <button class="btn primary" id="startBtn" onclick="toggleCamera()">▶ Start Camera</button>
-        <button class="btn" onclick="addSpace()" title="Add space between words">⎵ Space</button>
-        <button class="btn" onclick="deleteLast()" title="Delete last character">⌫ Delete</button>
-        <button class="btn" onclick="savePhrase()" title="Save phrase">💾 Save</button>
-        <button class="btn" onclick="clearAll()" title="Clear text">✕ Clear</button>
-        <button class="btn danger" onclick="exportTxt()" title="Export">↓ Export</button>
+    
+    <div>
+      <div class="section-title">Capture</div>
+      <button class="btn primary" id="captureBtn" onclick="captureBurst()" disabled>
+        📸 Capture 10 Samples
+      </button>
+      <div style="margin-top: 8px; display: flex; gap: 8px;">
+        <button class="btn" onclick="downloadDataset()" style="flex: 1;">💾 Save Data</button>
+        <button class="btn" onclick="clearLetter()" style="flex: 1; color: var(--danger);">🗑 Clear</button>
       </div>
     </div>
-
-    <!-- Hold sensitivity -->
-    <div class="sidebar-section">
-      <div class="section-label">Recognition</div>
-      <div class="slider-row">
-        <div class="slider-header">
-          <span>Hold duration</span>
-          <span class="slider-val" id="holdVal">1.2s</span>
-        </div>
-        <input type="range" min="5" max="30" value="12" id="holdSlider" oninput="updateHold(this.value)">
+    
+    <div class="stats-box">
+      <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+        <span>Current Letter</span>
+        <span id="currentCount" style="color: var(--accent);">0 samples</span>
       </div>
-      <div style="height: 10px;"></div>
-      <div class="slider-row">
-        <div class="slider-header">
-          <span>Hand scale</span>
-          <span class="slider-val" id="scaleVal">1.0×</span>
-        </div>
-        <input type="range" min="5" max="20" value="10" id="scaleSlider" oninput="updateScale(this.value)">
+      <div style="display: flex; justify-content: space-between;">
+        <span>Total Progress</span>
+        <span id="totalCount" style="color: var(--accent2);">0/260</span>
+      </div>
+      <div class="progress-bar" style="margin-top: 8px;">
+        <div class="progress-fill" id="progressBar" style="width: 0%"></div>
       </div>
     </div>
-
-    <!-- Alphabet reference -->
-    <div class="sidebar-section">
-      <!-- Add this as a new sidebar-section -->
-<div class="sidebar-section">
-  <div class="section-label">ML Model</div>
-  <input type="file" id="modelLoader" accept=".json" style="display:none" onchange="loadModelFile(event)">
-  <button class="btn" onclick="document.getElementById('modelLoader').click()" style="width:100%">
-    📁 Load Trained Model
-  </button>
-  <div id="modelStatus" style="font-size:11px;color:var(--muted);margin-top:8px;font-family:'DM Mono',monospace">
-    Using rule-based detection
-  </div>
-  <a href="train.html" target="_blank" style="display:block;margin-top:8px;font-size:12px;color:var(--accent);text-decoration:none">
-    → Train new model
-  </a>
-</div>
-      <div class="section-label">ASL Alphabet</div>
-      <div class="alphabet-grid" id="alphaGrid"></div>
+    
+    <div style="margin-top: auto;">
+      <button class="btn primary" onclick="trainAndExport()" style="background: var(--accent2);">
+        🤖 Train Model & Export
+      </button>
     </div>
-
-    <!-- Saved phrases -->
-    <div class="sidebar-section" style="flex:1; overflow:hidden; display:flex; flex-direction:column;">
-      <div class="section-label">Saved Phrases</div>
-      <div class="saved-list" id="savedList">
-        <div class="empty-saved" id="emptyMsg">No saved phrases yet</div>
-      </div>
-    </div>
-
   </div>
 </main>
 
 <div class="toast" id="toast"></div>
 
-<!-- MediaPipe Hands -->
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
 
 <script>
+const state = {
+  currentLetter: 'A',
+  dataset: {},
+  handDetected: false,
+  landmarks: null,
+  isVideo: false,
+  camera: null
+};
 
-  function loadModelFile(event) {
-  const file = event.target.files[0];
-  if (!file) return;
+const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
+const videoEl = document.getElementById('videoEl');
+const canvas = document.getElementById('overlayCanvas');
+const ctx = canvas.getContext('2d');
+
+// Init letter grid
+const grid = document.getElementById('letterGrid');
+LETTERS.forEach(l => {
+  const btn = document.createElement('button');
+  btn.className = 'letter-btn';
+  btn.textContent = l;
+  btn.id = 'btn-'+l;
+  btn.onclick = () => selectLetter(l);
+  grid.appendChild(btn);
+});
+
+let hands = new Hands({
+  locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+});
+hands.setOptions({maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.5});
+hands.onResults(onResults);
+
+function onResults(results) {
+  const w = canvas.width, h = canvas.height;
+  ctx.clearRect(0,0,w,h);
   
-  const reader = new FileReader();
-  reader.onload = (e) => {
-    try {
-      aslModel = JSON.parse(e.target.result);
-      
-      if (!aslModel.trees || !aslModel.classes) {
-        throw new Error('Invalid model format');
-      }
-      
-      document.getElementById('modelStatus').innerHTML = 
-        `<span style="color:var(--accent)">✓ Loaded: ${aslModel.classes.length} letters, ${aslModel.trees.length} trees</span>`;
-      
-      showToast('ML model loaded! Recognition improved.');
-    } catch (err) {
-      showToast('Error: ' + err.message);
-      console.error(err);
-    }
-  };
-  reader.readAsText(file);
-}
-let aslModel = null;
-const DEFAULT_MODEL = null; // We'll set this after training
-  function classifyASL(lms) {
-  // If we have a trained model, use ML prediction
-  if (aslModel && aslModel.trees) {
-    return predictASL(lms);
+  if (results.multiHandLandmarks && results.multiHandLandmarks[0]) {
+    state.handDetected = true;
+    state.landmarks = results.multiHandLandmarks[0];
+    drawLandmarks(state.landmarks, w, h);
+    document.getElementById('captureBtn').disabled = false;
+  } else {
+    state.handDetected = false;
+    state.landmarks = null;
+    document.getElementById('captureBtn').disabled = true;
   }
-  
-  // Fallback to old heuristic method
-  return classifyASLHeuristic(lms);
 }
 
-// ML Prediction using Random Forest
-function predictASL(landmarks) {
-  // Extract features: 21 landmarks × 3 coords = 63 features
-  // Normalize relative to wrist (landmark 0)
-  const wrist = landmarks[0];
-  const features = [];
+function drawLandmarks(lms, w, h) {
+  const pts = lms.map(p => ({x: p.x*w, y: p.y*h}));
+  const conn = [[0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],[5,9],[9,10],[10,11],[11,12],[9,13],[13,14],[14,15],[15,16],[13,17],[17,18],[18,19],[19,20],[0,17]];
   
-  landmarks.forEach(lm => {
-    features.push(lm.x - wrist.x);
-    features.push(lm.y - wrist.y);
-    features.push(lm.z - wrist.z);
+  ctx.strokeStyle = 'rgba(79,255,176,0.6)';
+  ctx.lineWidth = 2;
+  conn.forEach(([a,b]) => {
+    ctx.beginPath();
+    ctx.moveTo(pts[a].x, pts[a].y);
+    ctx.lineTo(pts[b].x, pts[b].y);
+    ctx.stroke();
   });
   
-  // Get predictions from all trees
-  const votes = {};
-  for (const tree of aslModel.trees) {
-    const pred = predictTree(tree, features);
-    votes[pred] = (votes[pred] || 0) + 1;
-  }
+  pts.forEach((p,i) => {
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, i===0?8:4, 0, Math.PI*2);
+    ctx.fillStyle = i===0?'#4fffb0':'#00e5ff';
+    ctx.fill();
+  });
+}
+
+async function useCamera() {
+  state.isVideo = false;
+  if (state.camera) state.camera.stop();
   
-  // Find majority vote
-  const totalVotes = aslModel.trees.length;
-  let bestPred = null;
-  let bestCount = 0;
+  const stream = await navigator.mediaDevices.getUserMedia({video: {width: 1280, height: 720}});
+  videoEl.srcObject = stream;
+  videoEl.src = '';
+  await videoEl.play();
   
-  for (const [pred, count] of Object.entries(votes)) {
-    if (count > bestCount) {
-      bestCount = count;
-      bestPred = parseInt(pred);
+  canvas.width = videoEl.videoWidth;
+  canvas.height = videoEl.videoHeight;
+  
+  state.camera = new Camera(videoEl, {
+    onFrame: async () => await hands.send({image: videoEl}),
+    width: 1280, height: 720
+  });
+  state.camera.start();
+}
+
+function loadVideo(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  
+  if (state.camera) state.camera.stop();
+  state.isVideo = true;
+  
+  videoEl.srcObject = null;
+  videoEl.src = URL.createObjectURL(file);
+  videoEl.play();
+  videoEl.playbackRate = 0.5;
+  
+  const process = () => {
+    if (videoEl.readyState >= 2) {
+      canvas.width = videoEl.videoWidth;
+      canvas.height = videoEl.videoHeight;
+      hands.send({image: videoEl});
+    }
+    requestAnimationFrame(process);
+  };
+  process();
+}
+
+function togglePlay() { videoEl.paused ? videoEl.play() : videoEl.pause(); }
+function stepFrame(d) { videoEl.pause(); videoEl.currentTime += d * (1/30); }
+
+function selectLetter(l) {
+  state.currentLetter = l;
+  document.getElementById('targetLetter').textContent = l;
+  document.querySelectorAll('.letter-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('btn-'+l).classList.add('active');
+  updateStats();
+}
+
+async function captureBurst() {
+  if (!state.landmarks) return;
+  
+  const btn = document.getElementById('captureBtn');
+  btn.disabled = true;
+  btn.textContent = 'Capturing...';
+  
+  if (!state.dataset[state.currentLetter]) state.dataset[state.currentLetter] = [];
+  
+  const startTime = videoEl.currentTime;
+  
+  for (let i = 0; i < 10; i++) {
+    if (state.isVideo) {
+      videoEl.currentTime = startTime + (i * 0.1);
+      await new Promise(r => setTimeout(r, 100));
+    } else {
+      await new Promise(r => setTimeout(r, 200));
+    }
+    
+    if (state.landmarks) {
+      const wrist = state.landmarks[0];
+      const features = [];
+      state.landmarks.forEach(lm => {
+        features.push(lm.x-wrist.x, lm.y-wrist.y, lm.z-wrist.z);
+      });
+      state.dataset[state.currentLetter].push(features);
     }
   }
   
-  const confidence = bestCount / totalVotes;
-  
-  // Only return if confidence is high enough
-  if (confidence < 0.3) return null;
-  
-  const letter = aslModel.classes[bestPred];
-  return { char: letter, conf: confidence };
+  document.getElementById('btn-'+state.currentLetter).classList.add('has-data');
+  updateStats();
+  btn.disabled = false;
+  btn.textContent = '📸 Capture 10 Samples';
+  showToast(`Captured 10 samples for ${state.currentLetter}`);
 }
 
-function predictTree(node, features) {
-  if (node.type === 'leaf') {
-    return node.prediction;
-  }
+function updateStats() {
+  const curr = state.dataset[state.currentLetter]?.length || 0;
+  const total = Object.values(state.dataset).reduce((a,b) => a+b.length, 0);
   
-  if (features[node.feature] <= node.threshold) {
-    return predictTree(node.left, features);
-  } else {
-    return predictTree(node.right, features);
-  }
+  document.getElementById('currentCount').textContent = curr + ' samples';
+  document.getElementById('totalCount').textContent = total + '/260';
+  document.getElementById('progressBar').style.width = Math.min((total/260)*100, 100) + '%';
 }
 
-// Rename your OLD classifyASL to this:
-function classifyASLHeuristic(lms) {
-  // ... paste your existing classifyASL code here ...
-  // (all the if/else rules you had before)
+function clearLetter() {
+  delete state.dataset[state.currentLetter];
+  document.getElementById('btn-'+state.currentLetter).classList.remove('has-data');
+  updateStats();
 }
+
+function downloadDataset() {
+  const data = JSON.stringify(state.dataset);
+  const blob = new Blob([data], {type: 'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'asl_dataset_'+Date.now()+'.json';
+  a.click();
+}
+
+function trainAndExport() {
+  const total = Object.values(state.dataset).reduce((a,b) => a+b.length, 0);
+  if (total < 26) {
+    showToast('Need at least 26 samples (1 per letter)');
+    return;
+  }
+  
+  showToast('Training... (takes 1-2 minutes)');
+  
+  // Prepare data
+  const X = [], y = [];
+  LETTERS.forEach((letter, idx) => {
+    if (state.dataset[letter]) {
+      state.dataset[letter].forEach(sample => {
+        X.push(sample);
+        y.push(idx);
+      });
+    }
+  });
+  
+  // Train Random Forest
+  const model = trainRF(X, y, 50);
+  
+  // Export
+  const exportData = {
+    type: 'random_forest',
+    classes: LETTERS,
+    trees: model.trees,
+    featureCount: 63,
+    created: new Date().toISOString()
+  };
+  
+  const blob = new Blob([JSON.stringify(exportData)], {type: 'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'asl_model_'+Date.now()+'.json';
+  a.click();
+  
+  showToast('Model trained and exported!');
+}
+
+function trainRF(X, y, nTrees=50) {
+  const trees = [];
+  for (let t = 0; t < nTrees; t++) {
+    const samples = [];
+    for (let i = 0; i < X.length; i++) samples.push(Math.floor(Math.random() * X.length));
+    trees.push(buildTree(X, y, samples, X[0].length, 0, 10));
+  }
+  return {trees};
+}
+
+function buildTree(X, y, samples, nFeatures, depth, maxDepth) {
+  const labels = samples.map(i => y[i]);
+  const unique = [...new Set(labels)];
+  
+  if (unique.length === 1 || depth >= maxDepth || samples.length < 5) {
+    const counts = {};
+    labels.forEach(l => counts[l] = (counts[l]||0)+1);
+    const majority = Object.entries(counts).sort((a,b) => b[1]-a[1])[0][0];
+    return {type: 'leaf', prediction: parseInt(majority)};
+  }
+  
+  const featSubset = [];
+  while (featSubset.length < Math.sqrt(nFeatures)) {
+    const f = Math.floor(Math.random() * nFeatures);
+    if (!featSubset.includes(f)) featSubset.push(f);
+  }
+  
+  let bestGain = -1, bestFeat = null, bestThresh = null;
+  
+  for (const feat of featSubset) {
+    const vals = samples.map(i => X[i][feat]).sort((a,b) => a-b);
+    for (let i = 1; i < vals.length-1; i++) {
+      const thresh = vals[i];
+      const left = samples.filter(s => X[s][feat] <= thresh);
+      const right = samples.filter(s => X[s][feat] > thresh);
+      if (left.length === 0 || right.length === 0) continue;
+      
+      const gain = infoGain(labels, left.map(s => y[s]), right.map(s => y[s]));
+      if (gain > bestGain) {
+        bestGain = gain;
+        bestFeat = feat;
+        bestThresh = thresh;
+      }
+    }
+  }
+  
+  if (bestFeat === null) {
+    const counts = {};
+    labels.forEach(l => counts[l] = (counts[l]||0)+1);
+    return {type: 'leaf', prediction: parseInt(Object.entries(counts).sort((a,b)=>b[1]-a[1])[0][0])};
+  }
+  
+  const leftS = samples.filter(s => X[s][bestFeat] <= bestThresh);
+  const rightS = samples.filter(s => X[s][bestFeat] > bestThresh);
+  
+  return {
+    type: 'split',
+    feature: bestFeat,
+    threshold: bestThresh,
+    left: buildTree(X, y, leftS, nFeatures, depth+1, maxDepth),
+    right: buildTree(X, y, rightS, nFeatures, depth+1, maxDepth)
+  };
+}
+
+function infoGain(parent, left, right) {
+  const p = entropy(parent);
+  const n = parent.length;
+  const c = (left.length/n) * entropy(left) + (right.length/n) * entropy(right);
+  return p - c;
+}
+
+function entropy(labels) {
+  const counts = {};
+  labels.forEach(l => counts[l] = (counts[l]||0)+1);
+  const n = labels.length;
+  let e = 0;
+  for (const c of Object.values(counts)) {
+    const p = c/n;
+    e -= p * Math.log2(p);
+  }
+  return e;
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+// Start with camera
+useCamera();
+selectLetter('A');
 </script>
 </body>
 </html>
