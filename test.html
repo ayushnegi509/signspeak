@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Camera Test</title>
+  <style>
+    body { background: #0a0d12; color: #fff; font-family: sans-serif; padding: 20px; }
+    button { background: #4fffb0; color: #000; border: none; padding: 20px; font-size: 20px; border-radius: 10px; cursor: pointer; margin: 20px 0; }
+    .error { color: #ff4d6d; }
+    .success { color: #4fffb0; }
+    video { width: 100%; max-width: 600px; background: #000; margin-top: 20px; }
+  </style>
+</head>
+<body>
+
+<h1>Camera Diagnostic Test</h1>
+
+<p><b>Current URL:</b> <span id="url"></span></p>
+<p id="protocol"></p>
+
+<button onclick="startTest()">📷 CLICK TO TEST CAMERA</button>
+
+<p id="status"></p>
+
+<video id="v" autoplay playsinline muted></video>
+
+<script>
+document.getElementById('url').textContent = location.href;
+
+if (location.protocol === 'https:') {
+  document.getElementById('protocol').innerHTML = '<span class="success">✅ HTTPS - Camera should work</span>';
+} else if (location.protocol === 'file:') {
+  document.getElementById('protocol').innerHTML = '<span class="error">❌ FILE:// - Camera will NOT work!<br>Open this on GitHub Pages (https://) instead</span>';
+} else {
+  document.getElementById('protocol').innerHTML = '<span class="error">⚠️ ' + location.protocol + ' - May not work</span>';
+}
+
+async function startTest() {
+  const status = document.getElementById('status');
+  status.innerHTML = '<p>Requesting camera...</p>';
+  
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+    document.getElementById('v').srcObject = stream;
+    status.innerHTML = '<p class="success">✅ SUCCESS! Camera is working</p>';
+  } catch (err) {
+    status.innerHTML = '<p class="error">❌ ERROR: ' + err.name + '</p><p class="error">' + err.message + '</p>';
+    
+    if (err.name === 'NotAllowedError') {
+      status.innerHTML += '<p>👉 Look for a camera icon 🔒 in your browser address bar and click "Allow"</p>';
+    } else if (err.name === 'NotFoundError') {
+      status.innerHTML += '<p>👉 No camera detected on this device</p>';
+    }
+  }
+}
+</script>
+
+</body>
+</html>
