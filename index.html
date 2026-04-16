@@ -3,24 +3,26 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SignSpeak Trainer</title>
+<meta http-equiv="Permissions-Policy" content="camera=(self)">
+<title>SignSpeak — ASL Recognition</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@400;600;800&family=DM+Sans:wght@300;400;500&display=swap');
-  
+
   :root {
     --bg: #0a0d12;
     --surface: #111520;
     --surface2: #181e2e;
-    --border: rgba(255,255,255,0.07);
+    --border: rgba(255,255,255,0.08);
     --accent: #4fffb0;
     --accent2: #00e5ff;
     --text: #f0f4ff;
     --muted: #6b7a99;
     --danger: #ff4d6d;
+    --radius: 12px;
   }
-  
+
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  
+
   body {
     background: var(--bg);
     color: var(--text);
@@ -28,18 +30,23 @@
     min-height: 100vh;
     display: flex;
     flex-direction: column;
+    overflow: hidden;
   }
-  
+
+  /* Header */
   header {
-    padding: 1.25rem 2rem;
-    border-bottom: 1px solid var(--border);
+    height: 60px;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    background: rgba(10,13,18,0.8);
+    padding: 0 2rem;
+    border-bottom: 1px solid var(--border);
+    background: rgba(10,13,18,0.9);
+    backdrop-filter: blur(10px);
+    z-index: 100;
   }
-  
-  .logo {
+
+  .brand {
     display: flex;
     align-items: center;
     gap: 12px;
@@ -47,228 +54,504 @@
     font-weight: 800;
     font-size: 1.3rem;
   }
-  
+
+  .brand-icon {
+    width: 36px;
+    height: 36px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+  }
+
+  .status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    color: var(--muted);
+    background: var(--surface2);
+    padding: 6px 12px;
+    border-radius: 100px;
+    border: 1px solid var(--border);
+  }
+
+  .status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--muted);
+    transition: all 0.3s;
+  }
+
+  .status-dot.active { 
+    background: var(--accent); 
+    box-shadow: 0 0 10px var(--accent);
+  }
+
+  .status-dot.error { 
+    background: var(--danger); 
+    box-shadow: 0 0 10px var(--danger);
+  }
+
+  /* Main Layout */
   main {
     flex: 1;
     display: grid;
-    grid-template-columns: 1fr 400px;
-    height: calc(100vh - 70px);
+    grid-template-columns: 1fr 360px;
+    overflow: hidden;
   }
-  
-  .video-section {
+
+  /* Video Area */
+  .video-container {
     position: relative;
     background: #050709;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
   }
-  
+
   #videoEl {
     width: 100%;
     height: 100%;
     object-fit: cover;
     transform: scaleX(-1);
+    display: none;
   }
-  
+
+  #videoEl.active { display: block; }
+
   #overlayCanvas {
     position: absolute;
-    top: 0; left: 0;
-    width: 100%; height: 100%;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
     pointer-events: none;
     transform: scaleX(-1);
   }
-  
-  .target-letter {
+
+  .placeholder {
     position: absolute;
-    top: 50%; left: 50%;
-    transform: translate(-50%, -50%);
-    font-family: 'Syne', sans-serif;
-    font-size: 150px;
-    font-weight: 800;
-    color: var(--accent);
-    opacity: 0.2;
-    pointer-events: none;
+    text-align: center;
+    color: var(--muted);
   }
-  
-  .controls {
-    padding: 1.5rem;
+
+  .placeholder-icon {
+    font-size: 64px;
+    margin-bottom: 16px;
+    opacity: 0.3;
+  }
+
+  .start-btn {
+    background: var(--accent);
+    color: #000;
+    border: none;
+    padding: 16px 32px;
+    border-radius: var(--radius);
+    font-family: 'Syne', sans-serif;
+    font-weight: 600;
+    font-size: 16px;
+    cursor: pointer;
+    margin-top: 20px;
+    transition: transform 0.2s;
+  }
+
+  .start-btn:hover { transform: scale(1.05); }
+
+  /* Detection UI */
+  .detection-pill {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    background: rgba(10,13,18,0.9);
+    border: 1px solid var(--border);
+    padding: 8px 16px;
+    border-radius: 100px;
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+
+  .detection-pill.visible { opacity: 1; }
+
+  .confidence-panel {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    background: rgba(10,13,18,0.9);
+    border: 1px solid var(--border);
+    padding: 12px 16px;
+    border-radius: var(--radius);
+    min-width: 140px;
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+
+  .confidence-panel.visible { opacity: 1; }
+
+  .conf-label {
+    font-size: 10px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-bottom: 4px;
+  }
+
+  .conf-value {
+    font-size: 24px;
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    color: var(--accent);
+  }
+
+  .conf-bar {
+    width: 100%;
+    height: 4px;
+    background: rgba(255,255,255,0.1);
+    border-radius: 2px;
+    margin-top: 8px;
+    overflow: hidden;
+  }
+
+  .conf-fill {
+    height: 100%;
+    background: var(--accent);
+    transition: width 0.3s;
+  }
+
+  /* Output Bar */
+  .output-bar {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: rgba(17,21,32,0.95);
+    border-top: 1px solid var(--border);
+    padding: 20px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    backdrop-filter: blur(10px);
+  }
+
+  .current-char {
+    width: 60px;
+    height: 60px;
+    background: var(--surface2);
+    border: 2px solid var(--border);
+    border-radius: var(--radius);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Syne', sans-serif;
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--accent);
+    flex-shrink: 0;
+  }
+
+  .current-char.detected {
+    border-color: var(--accent);
+    background: rgba(79,255,176,0.1);
+    animation: pulse 0.3s;
+  }
+
+  @keyframes pulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.1); }
+  }
+
+  .text-display {
+    flex: 1;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 12px 16px;
+    font-family: 'DM Mono', monospace;
+    font-size: 18px;
+    min-height: 60px;
+    display: flex;
+    align-items: center;
+    overflow: hidden;
+  }
+
+  .cursor {
+    display: inline-block;
+    width: 2px;
+    height: 1.2em;
+    background: var(--accent);
+    margin-left: 4px;
+    animation: blink 1s infinite;
+  }
+
+  @keyframes blink { 50% { opacity: 0; } }
+
+  /* Sidebar */
+  .sidebar {
     background: var(--surface);
     border-left: 1px solid var(--border);
     display: flex;
     flex-direction: column;
-    gap: 1.5rem;
     overflow-y: auto;
   }
-  
-  .section-title {
+
+  .panel {
+    padding: 20px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .panel-title {
     font-size: 11px;
     text-transform: uppercase;
     letter-spacing: 0.12em;
     color: var(--muted);
     font-family: 'DM Mono', monospace;
-    margin-bottom: 0.75rem;
+    margin-bottom: 12px;
   }
-  
-  .letter-grid {
-    display: grid;
-    grid-template-columns: repeat(7, 1fr);
-    gap: 6px;
-  }
-  
-  .letter-btn {
-    aspect-ratio: 1;
-    border: 1px solid var(--border);
-    background: var(--surface2);
-    color: var(--text);
-    border-radius: 8px;
-    font-family: 'Syne', sans-serif;
-    font-weight: 600;
-    font-size: 14px;
-    cursor: pointer;
-    transition: all 0.15s;
-  }
-  
-  .letter-btn:hover { border-color: var(--accent); }
-  .letter-btn.active { background: var(--accent); color: #050709; }
-  .letter-btn.has-data { border-color: var(--accent); color: var(--accent); }
-  
+
   .btn {
-    padding: 14px;
-    border-radius: 12px;
-    border: 1px solid rgba(255,255,255,0.1);
+    width: 100%;
+    padding: 10px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
     background: var(--surface2);
     color: var(--text);
     font-family: 'DM Sans', sans-serif;
-    font-size: 14px;
-    font-weight: 500;
+    font-size: 13px;
     cursor: pointer;
-    width: 100%;
-    transition: all 0.15s;
+    transition: all 0.2s;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
   }
-  
-  .btn:hover { background: rgba(255,255,255,0.06); }
+
+  .btn:hover { 
+    background: rgba(255,255,255,0.05); 
+    border-color: rgba(255,255,255,0.2);
+  }
+
   .btn.primary {
     background: var(--accent);
-    color: #050709;
+    color: #000;
+    border-color: var(--accent);
     font-weight: 600;
   }
-  
-  .progress-bar {
-    width: 100%;
-    height: 6px;
-    background: rgba(255,255,255,0.08);
-    border-radius: 3px;
-    overflow: hidden;
-  }
-  
-  .progress-fill {
-    height: 100%;
+
+  .btn.primary:hover { background: #3aeea0; }
+
+  .btn.active {
     background: var(--accent);
-    border-radius: 3px;
-    transition: width 0.3s;
+    color: #000;
   }
-  
-  input[type="file"] { display: none; }
-  
-  .stats-box {
+
+  .file-input { display: none; }
+
+  .info-text {
+    font-size: 12px;
+    color: var(--muted);
+    margin-top: 8px;
+    line-height: 1.5;
+  }
+
+  /* Alphabet Grid */
+  .alphabet {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 4px;
+  }
+
+  .alpha-cell {
+    aspect-ratio: 1;
     background: var(--surface2);
     border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 16px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Syne', sans-serif;
+    font-weight: 600;
     font-size: 13px;
+    color: var(--muted);
+    transition: all 0.2s;
   }
-  
+
+  .alpha-cell.active {
+    background: var(--accent);
+    color: #000;
+    border-color: var(--accent);
+  }
+
+  .alpha-cell.predicted {
+    border-color: var(--accent);
+    color: var(--accent);
+    box-shadow: 0 0 10px rgba(79,255,176,0.2);
+  }
+
+  /* Saved Phrases */
+  .phrase-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .phrase-item {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px;
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .phrase-item:hover { border-color: var(--border); }
+
+  .delete-btn {
+    background: none;
+    border: none;
+    color: var(--muted);
+    cursor: pointer;
+    font-size: 16px;
+  }
+
+  .delete-btn:hover { color: var(--danger); }
+
+  /* Toast */
   .toast {
     position: fixed;
     bottom: 24px;
     left: 50%;
-    transform: translateX(-50%) translateY(20px);
+    transform: translateX(-50%) translateY(100px);
     background: var(--surface2);
     border: 1px solid var(--border);
-    border-radius: 100px;
     padding: 12px 24px;
+    border-radius: 100px;
+    font-size: 14px;
     opacity: 0;
     transition: all 0.3s;
-    z-index: 100;
+    z-index: 1000;
+    pointer-events: none;
   }
-  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
-  
+
+  .toast.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+
+  /* Responsive */
   @media (max-width: 900px) {
-    main { grid-template-columns: 1fr; }
-    .video-section { height: 50vh; }
+    main { grid-template-columns: 1fr; grid-template-rows: 1fr auto; }
+    .sidebar { max-height: 40vh; }
   }
 </style>
 </head>
 <body>
 
 <header>
-  <div class="logo">🎯 SignSpeak <span style="color: var(--accent)">Trainer</span></div>
-  <div style="color: var(--muted); font-size: 13px;">Train ASL Recognition Model</div>
+  <div class="brand">
+    <div class="brand-icon">🤟</div>
+    <div>Sign<span style="color: var(--accent)">Speak</span></div>
+  </div>
+  <div class="status">
+    <div class="status-dot" id="statusDot"></div>
+    <span id="statusText">Ready</span>
+  </div>
 </header>
 
 <main>
-  <div class="video-section">
+  <!-- Video Section -->
+  <div class="video-container" id="videoContainer">
+    <div class="placeholder" id="placeholder">
+      <div class="placeholder-icon">📷</div>
+      <div style="font-size: 18px; margin-bottom: 8px;">Camera is off</div>
+      <div style="font-size: 14px; opacity: 0.7;">Click "Start Camera" to begin</div>
+      <button class="start-btn" onclick="startCamera()">▶ Start Camera</button>
+    </div>
+
     <video id="videoEl" autoplay muted playsinline></video>
     <canvas id="overlayCanvas"></canvas>
-    <div class="target-letter" id="targetLetter">A</div>
+
+    <div class="detection-pill" id="detectionPill">
+      <span style="color: var(--accent);">●</span>
+      <span id="detectionText">Hand detected</span>
+    </div>
+
+    <div class="confidence-panel" id="confidencePanel">
+      <div class="conf-label">Confidence</div>
+      <div class="conf-value" id="confValue">—</div>
+      <div class="conf-bar">
+        <div class="conf-fill" id="confFill" style="width: 0%"></div>
+      </div>
+    </div>
+
+    <div class="output-bar">
+      <div class="current-char" id="currentChar">—</div>
+      <div class="text-display">
+        <span id="outputText"></span><span class="cursor"></span>
+      </div>
+    </div>
   </div>
-  
-  <div class="controls">
-    <div>
-      <div class="section-title">Select Letter</div>
-      <div class="letter-grid" id="letterGrid"></div>
+
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <!-- Input Source -->
+    <div class="panel">
+      <div class="panel-title">Input Source</div>
+      <button class="btn primary" onclick="startCamera()" id="camBtn">📷 Start Camera</button>
+      <input type="file" id="videoUpload" class="file-input" accept="video/*" onchange="loadVideo(event)">
+      <button class="btn" onclick="document.getElementById('videoUpload').click()">🎬 Upload Video</button>
+      <div class="info-text" id="sourceInfo">Use camera or upload ASL video</div>
     </div>
-    
-    <div>
-      <div class="section-title">Input Source</div>
-      <div style="display: flex; gap: 8px; margin-bottom: 12px;">
-        <button class="btn" onclick="useCamera()" style="flex: 1;">📷 Camera</button>
-        <button class="btn" onclick="document.getElementById('videoFile').click()" style="flex: 1;">🎬 Video File</button>
-        <input type="file" id="videoFile" accept="video/*" onchange="loadVideo(event)">
-      </div>
-      <div style="display: flex; gap: 8px;">
-        <button class="btn" onclick="togglePlay()">⏯ Play</button>
-        <button class="btn" onclick="stepFrame(-1)">⏮ Frame</button>
-        <button class="btn" onclick="stepFrame(1)">Frame ⏭</button>
-      </div>
-    </div>
-    
-    <div>
-      <div class="section-title">Capture</div>
-      <button class="btn primary" id="captureBtn" onclick="captureBurst()" disabled>
-        📸 Capture 10 Samples
-      </button>
-      <div style="margin-top: 8px; display: flex; gap: 8px;">
-        <button class="btn" onclick="downloadDataset()" style="flex: 1;">💾 Save Data</button>
-        <button class="btn" onclick="clearLetter()" style="flex: 1; color: var(--danger);">🗑 Clear</button>
+
+    <!-- ML Model -->
+    <div class="panel">
+      <div class="panel-title">ML Model</div>
+      <input type="file" id="modelUpload" class="file-input" accept=".json" onchange="loadModel(event)">
+      <button class="btn" onclick="document.getElementById('modelUpload').click()">📁 Load Kaggle Model</button>
+      <div class="info-text" id="modelInfo">
+        Using basic detection.<br>
+        Load trained model for 90%+ accuracy.
       </div>
     </div>
-    <div class="sidebar-section">
-  <div class="section-label">ML Model</div>
-  <input type="file" id="modelUpload" accept=".json" style="display:none" onchange="loadModel(event)">
-  <button class="btn" onclick="document.getElementById('modelUpload').click()" style="width:100%">
-    📁 Load Trained Model
-  </button>
-  <div id="modelStatus" style="font-size:11px;color:var(--muted);margin-top:8px;font-family:'DM Mono',monospace">
-    Using rule-based detection
-  </div>
-</div>
-    
-    <div class="stats-box">
-      <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
-        <span>Current Letter</span>
-        <span id="currentCount" style="color: var(--accent);">0 samples</span>
+
+    <!-- Controls -->
+    <div class="panel">
+      <div class="panel-title">Text Controls</div>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+        <button class="btn" onclick="addSpace()">⎵ Space</button>
+        <button class="btn" onclick="deleteChar()">⌫ Delete</button>
+        <button class="btn" onclick="savePhrase()">💾 Save</button>
+        <button class="btn" style="color: var(--danger);" onclick="clearText()">✕ Clear</button>
       </div>
-      <div style="display: flex; justify-content: space-between;">
-        <span>Total Progress</span>
-        <span id="totalCount" style="color: var(--accent2);">0/260</span>
-      </div>
-      <div class="progress-bar" style="margin-top: 8px;">
-        <div class="progress-fill" id="progressBar" style="width: 0%"></div>
-      </div>
+      <button class="btn" onclick="exportText()" style="margin-top: 8px; border-color: var(--accent);">↓ Export Text</button>
     </div>
-    
-    <div style="margin-top: auto;">
-      <button class="btn primary" onclick="trainAndExport()" style="background: var(--accent2);">
-        🤖 Train Model & Export
-      </button>
+
+    <!-- Alphabet -->
+    <div class="panel">
+      <div class="panel-title">ASL Alphabet</div>
+      <div class="alphabet" id="alphabetGrid"></div>
+    </div>
+
+    <!-- Saved -->
+    <div class="panel" style="flex: 1;">
+      <div class="panel-title">Saved Phrases</div>
+      <div class="phrase-list" id="phraseList">
+        <div class="info-text" style="text-align: center; padding: 20px;">No saved phrases</div>
+      </div>
     </div>
   </div>
 </main>
@@ -280,351 +563,224 @@
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
 
 <script>
-  function loadModel(event) {
-  const file = event.target.files[0];
-  if (!file) return;
-  
-  const reader = new FileReader();
-  reader.onload = (e) => {
-    try {
-      const model = JSON.parse(e.target.result);
-      
-      // Validate it's a proper model
-      if (!model.trees || !model.classes) {
-        throw new Error('Invalid model format');
-      }
-      
-      // Store in your state (make sure this matches your state variable name)
-      state.aslModel = model; // or just aslModel = model; depending on your code
-      
-      // Update UI
-      document.getElementById('modelStatus').innerHTML = 
-        `<span style="color:var(--accent)">✓ Loaded: ${model.classes.length} letters, ${model.trees.length} trees</span>`;
-      
-      alert('Model loaded successfully! Recognition improved.');
-      
-    } catch (err) {
-      alert('Error loading model: ' + err.message);
-      console.error(err);
-    }
-  };
-  reader.readAsText(file);
-}
+// State
 const state = {
-  currentLetter: 'A',
-  dataset: {},
-  handDetected: false,
-  landmarks: null,
-  isVideo: false,
-  camera: null
+  isRunning: false,
+  stream: null,
+  mpCamera: null,
+  aslModel: null,
+  currentText: '',
+  savedPhrases: JSON.parse(localStorage.getItem('signspeak_phrases') || '[]'),
+  lastChar: null,
+  holdFrames: 0,
+  holdThreshold: 15, // ~0.5 seconds at 30fps
+  isVideoFile: false
 };
 
-const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
+// DOM Elements
 const videoEl = document.getElementById('videoEl');
 const canvas = document.getElementById('overlayCanvas');
 const ctx = canvas.getContext('2d');
+const statusDot = document.getElementById('statusDot');
+const statusText = document.getElementById('statusText');
+const currentCharEl = document.getElementById('currentChar');
+const outputTextEl = document.getElementById('outputText');
 
-// Init letter grid
-const grid = document.getElementById('letterGrid');
-LETTERS.forEach(l => {
-  const btn = document.createElement('button');
-  btn.className = 'letter-btn';
-  btn.textContent = l;
-  btn.id = 'btn-'+l;
-  btn.onclick = () => selectLetter(l);
-  grid.appendChild(btn);
+// Initialize Alphabet Grid
+const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
+const grid = document.getElementById('alphabetGrid');
+letters.forEach(l => {
+  const cell = document.createElement('div');
+  cell.className = 'alpha-cell';
+  cell.textContent = l;
+  cell.id = `alpha-${l}`;
+  grid.appendChild(cell);
 });
 
+// Initialize MediaPipe
 let hands = new Hands({
   locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
 });
-hands.setOptions({maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.5});
+
+hands.setOptions({
+  maxNumHands: 1,
+  modelComplexity: 1,
+  minDetectionConfidence: 0.5,
+  minTrackingConfidence: 0.5
+});
+
 hands.onResults(onResults);
 
 function onResults(results) {
-  const w = canvas.width, h = canvas.height;
-  ctx.clearRect(0,0,w,h);
-  
+  const w = canvas.width;
+  const h = canvas.height;
+  ctx.clearRect(0, 0, w, h);
+
   if (results.multiHandLandmarks && results.multiHandLandmarks[0]) {
-    state.handDetected = true;
-    state.landmarks = results.multiHandLandmarks[0];
-    drawLandmarks(state.landmarks, w, h);
-    document.getElementById('captureBtn').disabled = false;
+    const landmarks = results.multiHandLandmarks[0];
+    drawLandmarks(landmarks, w, h);
+    processDetection(landmarks);
   } else {
-    state.handDetected = false;
-    state.landmarks = null;
-    document.getElementById('captureBtn').disabled = true;
+    document.getElementById('detectionPill').classList.remove('visible');
+    document.getElementById('confidencePanel').classList.remove('visible');
+    currentCharEl.textContent = '—';
+    currentCharEl.classList.remove('predicted');
+    highlightLetter(null);
   }
 }
 
-function drawLandmarks(lms, w, h) {
-  const pts = lms.map(p => ({x: p.x*w, y: p.y*h}));
-  const conn = [[0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],[5,9],[9,10],[10,11],[11,12],[9,13],[13,14],[14,15],[15,16],[13,17],[17,18],[18,19],[19,20],[0,17]];
+function drawLandmarks(lm, w, h) {
+  const pts = lm.map(p => ({ x: p.x * w, y: p.y * h }));
+  const connections = [[0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],[5,9],[9,10],[10,11],[11,12],[9,13],[13,14],[14,15],[15,16],[13,17],[17,18],[18,19],[19,20],[0,17]];
   
   ctx.strokeStyle = 'rgba(79,255,176,0.6)';
   ctx.lineWidth = 2;
-  conn.forEach(([a,b]) => {
+  connections.forEach(([a,b]) => {
     ctx.beginPath();
     ctx.moveTo(pts[a].x, pts[a].y);
     ctx.lineTo(pts[b].x, pts[b].y);
     ctx.stroke();
   });
-  
-  pts.forEach((p,i) => {
+
+  pts.forEach((p, i) => {
     ctx.beginPath();
-    ctx.arc(p.x, p.y, i===0?8:4, 0, Math.PI*2);
-    ctx.fillStyle = i===0?'#4fffb0':'#00e5ff';
+    ctx.arc(p.x, p.y, i === 0 ? 6 : 3, 0, Math.PI * 2);
+    ctx.fillStyle = i === 0 ? '#4fffb0' : '#00e5ff';
     ctx.fill();
   });
 }
 
-async function useCamera() {
-  state.isVideo = false;
-  if (state.camera) state.camera.stop();
+// Classification
+function processDetection(landmarks) {
+  document.getElementById('detectionPill').classList.add('visible');
   
-  const stream = await navigator.mediaDevices.getUserMedia({video: {width: 1280, height: 720}});
-  videoEl.srcObject = stream;
-  videoEl.src = '';
-  await videoEl.play();
+  const result = state.aslModel ? classifyWithModel(landmarks) : classifyHeuristic(landmarks);
   
-  canvas.width = videoEl.videoWidth;
-  canvas.height = videoEl.videoHeight;
-  
-  state.camera = new Camera(videoEl, {
-    onFrame: async () => await hands.send({image: videoEl}),
-    width: 1280, height: 720
-  });
-  state.camera.start();
-}
-
-function loadVideo(e) {
-  const file = e.target.files[0];
-  if (!file) return;
-  
-  if (state.camera) state.camera.stop();
-  state.isVideo = true;
-  
-  videoEl.srcObject = null;
-  videoEl.src = URL.createObjectURL(file);
-  videoEl.play();
-  videoEl.playbackRate = 0.5;
-  
-  const process = () => {
-    if (videoEl.readyState >= 2) {
-      canvas.width = videoEl.videoWidth;
-      canvas.height = videoEl.videoHeight;
-      hands.send({image: videoEl});
-    }
-    requestAnimationFrame(process);
-  };
-  process();
-}
-
-function togglePlay() { videoEl.paused ? videoEl.play() : videoEl.pause(); }
-function stepFrame(d) { videoEl.pause(); videoEl.currentTime += d * (1/30); }
-
-function selectLetter(l) {
-  state.currentLetter = l;
-  document.getElementById('targetLetter').textContent = l;
-  document.querySelectorAll('.letter-btn').forEach(b => b.classList.remove('active'));
-  document.getElementById('btn-'+l).classList.add('active');
-  updateStats();
-}
-
-async function captureBurst() {
-  if (!state.landmarks) return;
-  
-  const btn = document.getElementById('captureBtn');
-  btn.disabled = true;
-  btn.textContent = 'Capturing...';
-  
-  if (!state.dataset[state.currentLetter]) state.dataset[state.currentLetter] = [];
-  
-  const startTime = videoEl.currentTime;
-  
-  for (let i = 0; i < 10; i++) {
-    if (state.isVideo) {
-      videoEl.currentTime = startTime + (i * 0.1);
-      await new Promise(r => setTimeout(r, 100));
-    } else {
-      await new Promise(r => setTimeout(r, 200));
-    }
+  if (result) {
+    document.getElementById('confidencePanel').classList.add('visible');
+    document.getElementById('confValue').textContent = Math.round(result.conf * 100) + '%';
+    document.getElementById('confFill').style.width = (result.conf * 100) + '%';
     
-    if (state.landmarks) {
-      const wrist = state.landmarks[0];
-      const features = [];
-      state.landmarks.forEach(lm => {
-        features.push(lm.x-wrist.x, lm.y-wrist.y, lm.z-wrist.z);
-      });
-      state.dataset[state.currentLetter].push(features);
-    }
-  }
-  
-  document.getElementById('btn-'+state.currentLetter).classList.add('has-data');
-  updateStats();
-  btn.disabled = false;
-  btn.textContent = '📸 Capture 10 Samples';
-  showToast(`Captured 10 samples for ${state.currentLetter}`);
-}
-
-function updateStats() {
-  const curr = state.dataset[state.currentLetter]?.length || 0;
-  const total = Object.values(state.dataset).reduce((a,b) => a+b.length, 0);
-  
-  document.getElementById('currentCount').textContent = curr + ' samples';
-  document.getElementById('totalCount').textContent = total + '/260';
-  document.getElementById('progressBar').style.width = Math.min((total/260)*100, 100) + '%';
-}
-
-function clearLetter() {
-  delete state.dataset[state.currentLetter];
-  document.getElementById('btn-'+state.currentLetter).classList.remove('has-data');
-  updateStats();
-}
-
-function downloadDataset() {
-  const data = JSON.stringify(state.dataset);
-  const blob = new Blob([data], {type: 'application/json'});
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = 'asl_dataset_'+Date.now()+'.json';
-  a.click();
-}
-
-function trainAndExport() {
-  const total = Object.values(state.dataset).reduce((a,b) => a+b.length, 0);
-  if (total < 26) {
-    showToast('Need at least 26 samples (1 per letter)');
-    return;
-  }
-  
-  showToast('Training... (takes 1-2 minutes)');
-  
-  // Prepare data
-  const X = [], y = [];
-  LETTERS.forEach((letter, idx) => {
-    if (state.dataset[letter]) {
-      state.dataset[letter].forEach(sample => {
-        X.push(sample);
-        y.push(idx);
-      });
-    }
-  });
-  
-  // Train Random Forest
-  const model = trainRF(X, y, 50);
-  
-  // Export
-  const exportData = {
-    type: 'random_forest',
-    classes: LETTERS,
-    trees: model.trees,
-    featureCount: 63,
-    created: new Date().toISOString()
-  };
-  
-  const blob = new Blob([JSON.stringify(exportData)], {type: 'application/json'});
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = 'asl_model_'+Date.now()+'.json';
-  a.click();
-  
-  showToast('Model trained and exported!');
-}
-
-function trainRF(X, y, nTrees=50) {
-  const trees = [];
-  for (let t = 0; t < nTrees; t++) {
-    const samples = [];
-    for (let i = 0; i < X.length; i++) samples.push(Math.floor(Math.random() * X.length));
-    trees.push(buildTree(X, y, samples, X[0].length, 0, 10));
-  }
-  return {trees};
-}
-
-function buildTree(X, y, samples, nFeatures, depth, maxDepth) {
-  const labels = samples.map(i => y[i]);
-  const unique = [...new Set(labels)];
-  
-  if (unique.length === 1 || depth >= maxDepth || samples.length < 5) {
-    const counts = {};
-    labels.forEach(l => counts[l] = (counts[l]||0)+1);
-    const majority = Object.entries(counts).sort((a,b) => b[1]-a[1])[0][0];
-    return {type: 'leaf', prediction: parseInt(majority)};
-  }
-  
-  const featSubset = [];
-  while (featSubset.length < Math.sqrt(nFeatures)) {
-    const f = Math.floor(Math.random() * nFeatures);
-    if (!featSubset.includes(f)) featSubset.push(f);
-  }
-  
-  let bestGain = -1, bestFeat = null, bestThresh = null;
-  
-  for (const feat of featSubset) {
-    const vals = samples.map(i => X[i][feat]).sort((a,b) => a-b);
-    for (let i = 1; i < vals.length-1; i++) {
-      const thresh = vals[i];
-      const left = samples.filter(s => X[s][feat] <= thresh);
-      const right = samples.filter(s => X[s][feat] > thresh);
-      if (left.length === 0 || right.length === 0) continue;
-      
-      const gain = infoGain(labels, left.map(s => y[s]), right.map(s => y[s]));
-      if (gain > bestGain) {
-        bestGain = gain;
-        bestFeat = feat;
-        bestThresh = thresh;
+    currentCharEl.textContent = result.char;
+    currentCharEl.classList.add('predicted');
+    highlightLetter(result.char);
+    
+    // Type if held long enough
+    if (result.char === state.lastChar) {
+      state.holdFrames++;
+      if (state.holdFrames >= state.holdThreshold) {
+        addChar(result.char);
+        state.holdFrames = 0;
+        currentCharEl.classList.add('detected');
+        setTimeout(() => currentCharEl.classList.remove('detected'), 300);
       }
+    } else {
+      state.lastChar = result.char;
+      state.holdFrames = 0;
     }
+  } else {
+    document.getElementById('confidencePanel').classList.remove('visible');
+    currentCharEl.textContent = '?';
+    currentCharEl.classList.remove('predicted');
+    state.lastChar = null;
+    state.holdFrames = 0;
   }
+}
+
+function classifyWithModel(lm) {
+  // Extract 63 features (normalized to wrist)
+  const wrist = lm[0];
+  const features = [];
+  lm.forEach(p => {
+    features.push(p.x - wrist.x, p.y - wrist.y, p.z - wrist.z);
+  });
+
+  // Vote across all trees
+  const votes = {};
+  state.aslModel.trees.forEach(tree => {
+    const pred = traverseTree(tree, features);
+    votes[pred] = (votes[pred] || 0) + 1;
+  });
+
+  // Find winner
+  let best = null, max = 0;
+  Object.entries(votes).forEach(([k, v]) => {
+    if (v > max) { max = v; best = parseInt(k); }
+  });
+
+  const conf = max / state.aslModel.trees.length;
+  if (conf < 0.3) return null;
   
-  if (bestFeat === null) {
-    const counts = {};
-    labels.forEach(l => counts[l] = (counts[l]||0)+1);
-    return {type: 'leaf', prediction: parseInt(Object.entries(counts).sort((a,b)=>b[1]-a[1])[0][0])};
+  return { char: state.aslModel.classes[best], conf: conf };
+}
+
+function traverseTree(node, features) {
+  if (node.type === 'leaf') return node.prediction;
+  if (features[node.feature] <= node.threshold) {
+    return traverseTree(node.left, features);
   }
-  
-  const leftS = samples.filter(s => X[s][bestFeat] <= bestThresh);
-  const rightS = samples.filter(s => X[s][bestFeat] > bestThresh);
-  
-  return {
-    type: 'split',
-    feature: bestFeat,
-    threshold: bestThresh,
-    left: buildTree(X, y, leftS, nFeatures, depth+1, maxDepth),
-    right: buildTree(X, y, rightS, nFeatures, depth+1, maxDepth)
-  };
+  return traverseTree(node.right, features);
 }
 
-function infoGain(parent, left, right) {
-  const p = entropy(parent);
-  const n = parent.length;
-  const c = (left.length/n) * entropy(left) + (right.length/n) * entropy(right);
-  return p - c;
+function classifyHeuristic(lm) {
+  // Simple rule-based fallback
+  const ext = (tip, pip) => lm[tip].y < lm[pip].y - 0.05;
+  const curl = (tip, pip) => lm[tip].y > lm[pip].y;
+  
+  const i = ext(8,6), m = ext(12,10), r = ext(16,14), p = ext(20,18);
+  const ic = curl(8,6), mc = curl(12,10), rc = curl(16,14), pc = curl(20,18);
+  
+  if (ic && mc && rc && pc) return {char:'A', conf:0.7};
+  if (i && m && r && p) return {char:'B', conf:0.7};
+  if (i && !m && !r && !p) return {char:'G', conf:0.6};
+  if (i && m && !r && !p) return {char:'U', conf:0.6};
+  if (!i && !m && !r && p) return {char:'I', conf:0.6};
+  if (i && m && r && !p) return {char:'W', conf:0.6};
+  
+  return null;
 }
 
-function entropy(labels) {
-  const counts = {};
-  labels.forEach(l => counts[l] = (counts[l]||0)+1);
-  const n = labels.length;
-  let e = 0;
-  for (const c of Object.values(counts)) {
-    const p = c/n;
-    e -= p * Math.log2(p);
+function highlightLetter(char) {
+  document.querySelectorAll('.alpha-cell').forEach(c => c.classList.remove('active'));
+  if (char) {
+    const el = document.getElementById(`alpha-${char}`);
+    if (el) el.classList.add('active');
   }
-  return e;
 }
 
-function showToast(msg) {
-  const t = document.getElementById('toast');
-  t.textContent = msg;
-  t.classList.add('show');
-  setTimeout(() => t.classList.remove('show'), 3000);
-}
-
-// Start with camera
-useCamera();
-selectLetter('A');
-</script>
-</body>
-</html>
+// Camera Functions
+async function startCamera() {
+  try {
+    showToast('Requesting camera access...');
+    
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { width: 1280, height: 720, facingMode: 'user' }
+    });
+    
+    state.stream = stream;
+    videoEl.srcObject = stream;
+    videoEl.classList.add('active');
+    document.getElementById('placeholder').style.display = 'none';
+    
+    await videoEl.play();
+    
+    canvas.width = videoEl.videoWidth;
+    canvas.height = videoEl.videoHeight;
+    
+    // Start MediaPipe
+    state.mpCamera = new Camera(videoEl, {
+      onFrame: async () => {
+        await hands.send({ image: videoEl });
+      },
+      width: 1280,
+      height: 720
+    });
+    
+    state.mpCamera.start();
+    state.isRunning = true;
+    state.isVideoFile = false;
+    
+    // Update UI
+    document.getElementById('camBtn').textContent = '⏹ Stop Camera';
+    document.getElementById('camBtn').classList.add('active');
+    document.g
