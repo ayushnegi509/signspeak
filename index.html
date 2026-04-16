@@ -783,20 +783,101 @@ async function startCamera() {
     // Update UI
     document.getElementById('camBtn').textContent = '⏹ Stop Camera';
     document.getElementById('camBtn').classList.add('active');
-    document.g
-    // Model Loading
-function loadModel(event) {
-  const file = event.target.files[0];
+    document.getElementById('sourceInfo').textContent = 'Camera active';
+    statusDot.classList.add('active');
+    statusText.textContent = 'Camera on';
+    
+    showToast('Camera started! Show your hand.');
+    
+  } catch (err) {
+    console.error(err);
+    statusDot.classList.add('error');
+    statusText.textContent = 'Error';
+    showToast('Camera error: ' + err.message);
+    alert('Camera access failed. Make sure you:\n1. Are on HTTPS (not file://)\n2. Allowed camera permissions\n3. Have a camera connected');
+  }
+}
+
+function stopCamera() {
+  if (state.mpCamera) {
+    state.mpCamera.stop();
+    state.mpCamera = null;
+  }
+  if (state.stream) {
+    state.stream.getTracks().forEach(t => t.stop());
+    state.stream = null;
+  }
+  
+  videoEl.srcObject = null;
+  videoEl.classList.remove('active');
+  document.getElementById('placeholder').style.display = 'flex';
+  
+  state.isRunning = false;
+  
+  document.getElementById('camBtn').textContent = '📷 Start Camera';
+  document.getElementById('camBtn').classList.remove('active');
+  document.getElementById('sourceInfo').textContent = 'Use camera or upload ASL video';
+  statusDot.classList.remove('active');
+  statusText.textContent = 'Ready';
+  
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+}
+
+// Video File
+function loadVideo(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  
+  stopCamera();
+  
+  const url = URL.createObjectURL(file);
+  videoEl.src = url;
+  videoEl.classList.add('active');
+  videoEl.playbackRate = 0.5;
+  videoEl.play();
+  
+  document.getElementById('placeholder').style.display = 'none';
+  state.isVideoFile = true;
+  
+  const process = async () => {
+    if (!state.isVideoFile || videoEl.paused) return;
+    if (videoEl.readyState >= 2) {
+      canvas.width = videoEl.videoWidth;
+      canvas.height = videoEl.videoHeight;
+      await hands.send({ image: videoEl });
+    }
+    requestAnimationFrame(process);
+  };
+  process();
+  
+  document.getElementById('sourceInfo').textContent = 'Video: ' + file.name;
+  showToast('Video loaded! Use video controls to navigate');
+}
+
+// Model Loading
+function loadModel(e) {
+  const file = e.target.files[0];
   if (!file) return;
   
   const reader = new FileReader();
-  reader.onload = (e) => {
+  reader.onload = (event) => {
     try {
-      state.aslModel = JSON.parse(e.target.result);
-      document.getElementById('modelInfo').innerHTML = '✓ Model loaded successfully!<br>Ready to recognize signs.';
-      showToast('Model loaded! 90%+ accuracy enabled.');
+      const model = JSON.parse(event.target.result);
+      
+      if (!model.trees || !model.classes) {
+        throw new Error('Invalid model format');
+      }
+      
+      state.aslModel = model;
+      
+      document.getElementById('modelInfo').innerHTML = 
+        `<span style="color: var(--accent);">✓ Model loaded: ${model.classes.length} letters<br>Accuracy: ${(model.accuracy * 100).toFixed(0)}%</span>`;
+      
+      showToast('Kaggle model loaded! Recognition improved.');
+      
     } catch (err) {
-      showToast('Error loading model: ' + err.message);
+      showToast('Error: ' + err.message);
+      alert('Failed to load model. Make sure it\'s the correct JSON file from training.');
     }
   };
   reader.readAsText(file);
@@ -820,29 +901,23 @@ function deleteChar() {
 
 function clearText() {
   state.currentText = '';
-  outputTextEl.textContent = state.currentText;
+  outputTextEl.textContent = '';
+  showToast('Text cleared');
 }
 
 function savePhrase() {
-  if (!state.currentText.trim()) {
+  const text = state.currentText.trim();
+  if (!text) {
     showToast('Nothing to save');
     return;
   }
-  state.savedPhrases.push(state.currentText);
+  
+  state.savedPhrases.unshift(text);
+  if (state.savedPhrases.length > 10) state.savedPhrases.pop();
+  
   localStorage.setItem('signspeak_phrases', JSON.stringify(state.savedPhrases));
   renderPhrases();
   showToast('Phrase saved!');
-}
-
-function exportText() {
-  const text = state.currentText || 'No text to export';
-  const blob = new Blob([text], { type: 'text/plain' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = 'signspeak-output.txt';
-  a.click();
-  URL.revokeObjectURL(url);
 }
 
 function renderPhrases() {
@@ -851,52 +926,62 @@ function renderPhrases() {
     list.innerHTML = '<div class="info-text" style="text-align: center; padding: 20px;">No saved phrases</div>';
     return;
   }
-  list.innerHTML = state.savedPhrases.map((phrase, i) => `
-    <div class="phrase-item">
-      <span>${phrase}</span>
+  
+  list.innerHTML = '';
+  state.savedPhrases.forEach((phrase, i) => {
+    const item = document.createElement('div');
+    item.className = 'phrase-item';
+    item.innerHTML = `
+      <span onclick="loadPhrase('${phrase.replace(/'/g, "\\'")}')" style="flex: 1; overflow: hidden; text-overflow: ellipsis;">${phrase}</span>
       <button class="delete-btn" onclick="deletePhrase(${i})">✕</button>
-    </div>
-  `).join('');
+    `;
+    list.appendChild(item);
+  });
 }
 
-function deletePhrase(index) {
-  state.savedPhrases.splice(index, 1);
+function loadPhrase(text) {
+  state.currentText = text;
+  outputTextEl.textContent = text;
+}
+
+function deletePhrase(i) {
+  state.savedPhrases.splice(i, 1);
   localStorage.setItem('signspeak_phrases', JSON.stringify(state.savedPhrases));
   renderPhrases();
 }
 
-function loadVideo(event) {
-  const file = event.target.files[0];
-  if (!file) return;
+function exportText() {
+  const text = state.currentText.trim();
+  if (!text) {
+    showToast('Nothing to export');
+    return;
+  }
   
-  const url = URL.createObjectURL(file);
-  videoEl.src = url;
-  videoEl.classList.add('active');
-  document.getElementById('placeholder').style.display = 'none';
-  state.isVideoFile = true;
-  
-  videoEl.onloadedmetadata = () => {
-    canvas.width = videoEl.videoWidth;
-    canvas.height = videoEl.videoHeight;
-    videoEl.play();
-    
-    state.mpCamera = new Camera(videoEl, {
-      onFrame: async () => {
-        await hands.send({ image: videoEl });
-      }
-    });
-    state.mpCamera.start();
-    state.isRunning = true;
-  };
-  showToast('Video loaded. Processing...');
+  const blob = new Blob([text], { type: 'text/plain' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'signspeak_' + Date.now() + '.txt';
+  a.click();
+  showToast('Text exported!');
 }
 
 function showToast(msg) {
-  const t = document.getElementById('toast');
-  t.textContent = msg;
-  t.classList.add('show');
-  setTimeout(() => t.classList.remove('show'), 3000);
+  const toast = document.getElementById('toast');
+  toast.textContent = msg;
+  toast.classList.add('show');
+  setTimeout(() => toast.classList.remove('show'), 3000);
 }
 
-// Initialize
+// Init
 renderPhrases();
+
+// Handle page visibility
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden && state.isRunning && !state.isVideoFile) {
+    // Optional: pause when tab hidden
+  }
+});
+</script>
+
+</body>
+</html>
